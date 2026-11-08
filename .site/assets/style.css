@@ -26,7 +26,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .brand { font-family: var(--serif); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; letter-spacing: .5px; }
 .topbar-right { display: flex; gap: 10px; align-items: center; }
 .icon-btn { background: none; border: 1px solid var(--line); border-radius: 10px; padding: 5px 9px; cursor: pointer; font-size: 14px; }
-.gh-link { color: var(--ink2); text-decoration: none; font-size: 13px; border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; }
+.gh-link { color: var(--ink2); text-decoration: none; font-size: 13px; border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; background: none; cursor: pointer; font-family: inherit; }
 .gh-link:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Hero */
