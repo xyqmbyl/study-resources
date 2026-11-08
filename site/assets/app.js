@@ -123,10 +123,18 @@ $("#sidebar").addEventListener("click", (e) => {
   state.folder = p;
   renderSidebar();
   render();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  scrollToResults();
 });
 
 /* ---------- 列表 ---------- */
+// 滚到结果区第一个内容（面包屑/分组标题）上方一点，不回到页顶、侧栏不动
+function scrollToResults() {
+  const el = document.querySelector("#results .crumb, #results .group-title, #results .grid");
+  if (!el) return;
+  const y = el.getBoundingClientRect().top + window.scrollY - 76; // 76 ≈ 顶栏高度
+  window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+}
+
 function render() {
   let items = MANIFEST.items;
   if (state.folder) items = items.filter((x) => underFolder(x, state.folder));
@@ -173,7 +181,7 @@ $("#results").addEventListener("click", (e) => {
   state.folder = a.dataset.c;
   renderSidebar();
   render();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  scrollToResults();
 });
 
 function cardHTML(it) {
