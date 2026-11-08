@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="680" viewBox="0 0 1100 680">
+  <rect width="1100" height="680" fill="#f8fafc"/>
+  <style>
+    .node { fill:#ffffff; stroke:#2563eb; stroke-width:3; }
+    .input { fill:#eff6ff; stroke:#1d4ed8; }
+    .hidden { fill:#f0fdf4; stroke:#16a34a; }
+    .output { fill:#fff7ed; stroke:#f97316; }
+    .label { font-family: "Microsoft YaHei", Arial, sans-serif; font-size:24px; fill:#0f172a; font-weight:700; }
+    .small { font-family: "Microsoft YaHei", Arial, sans-serif; font-size:18px; fill:#334155; }
+    .edge { stroke:#475569; stroke-width:2.4; fill:none; marker-end:url(#arrow); }
+    .w { font-family: "Microsoft YaHei", Arial, sans-serif; font-size:17px; fill:#1e293b; }
+    .title { font-family: "Microsoft YaHei", Arial, sans-serif; font-size:28px; fill:#0f172a; font-weight:800; }
+    .box { fill:#ffffff; stroke:#cbd5e1; stroke-width:2; rx:10; }
+  </style>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="48" class="title">反向传播与梯度下降计算题模型图</text>
+  <text x="40" y="82" class="small">2 个输入、2 个隐藏层神经元、1 个输出神经元；隐藏层与输出层均使用 sigmoid 激活函数。</text>
+
+  <rect x="35" y="110" width="1030" height="505" class="box"/>
+
+  <!-- layer labels -->
+  <text x="110" y="145" class="label">输入层</text>
+  <text x="465" y="145" class="label">隐藏层</text>
+  <text x="840" y="145" class="label">输出层</text>
+
+  <!-- nodes -->
+  <circle cx="150" cy="250" r="46" class="node input"/>
+  <text x="128" y="257" class="label">x₁</text>
+  <text x="118" y="305" class="small">x₁=0.6</text>
+
+  <circle cx="150" cy="430" r="46" class="node input"/>
+  <text x="128" y="437" class="label">x₂</text>
+  <text x="118" y="485" class="small">x₂=0.1</text>
+
+  <circle cx="520" cy="250" r="50" class="node hidden"/>
+  <text x="497" y="257" class="label">h₁</text>
+  <text x="482" y="310" class="small">bₕ₁=0.10</text>
+
+  <circle cx="520" cy="430" r="50" class="node hidden"/>
+  <text x="497" y="437" class="label">h₂</text>
+  <text x="482" y="490" class="small">bₕ₂=-0.10</text>
+
+  <circle cx="900" cy="340" r="52" class="node output"/>
+  <text x="879" y="347" class="label">ŷ</text>
+  <text x="866" y="404" class="small">bₒ=0.05</text>
+
+  <!-- edges input to hidden -->
+  <path d="M196,250 C300,230 380,230 470,250" class="edge"/>
+  <text x="315" y="222" class="w">w₁=0.20</text>
+
+  <path d="M190,275 C298,330 380,385 474,415" class="edge"/>
+  <text x="305" y="360" class="w">w₂=-0.40</text>
+
+  <path d="M190,405 C298,350 380,295 474,265" class="edge"/>
+  <text x="305" y="314" class="w">w₃=0.30</text>
+
+  <path d="M196,430 C300,450 380,450 470,430" class="edge"/>
+  <text x="315" y="476" class="w">w₄=0.10</text>
+
+  <!-- hidden to output -->
+  <path d="M568,264 C685,290 760,312 850,332" class="edge"/>
+  <text x="675" y="274" class="w">v₁=-0.30</text>
+
+  <path d="M568,416 C685,390 760,368 850,348" class="edge"/>
+  <text x="675" y="424" class="w">v₂=0.40</text>
+
+  <!-- formula box -->
+  <rect x="80" y="545" width="945" height="48" fill="#f1f5f9" stroke="#cbd5e1" rx="8"/>
+  <text x="105" y="576" class="small">激活函数：σ(z)=1/(1+e⁻ᶻ)；损失函数：L = 1/2(ŷ - y)²；真实标签：y = 1；学习率：η = 0.5</text>
+</svg>
