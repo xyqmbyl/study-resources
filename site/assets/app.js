@@ -39,12 +39,13 @@ async function loadManifest() {
   MANIFEST.items.forEach((it) => (it._s = [it.name, it.title, it.subject, it.note, it.author, it.py, ...(it.tags || [])].filter(Boolean).join(" ")));
   FUSE = new Fuse(MANIFEST.items, { keys: ["_s"], threshold: 0.35, ignoreLocation: true });
 
-  const subs = Object.keys(MANIFEST.subjects).length;
+  const subNames = Object.keys(MANIFEST.subjects);
+  const subs = subNames.length;
   const nFile = MANIFEST.items.filter((x) => x.type === "file").length;
   const nLink = MANIFEST.items.filter((x) => x.type === "link").length;
   const nBook = MANIFEST.items.filter((x) => x.type === "book").length;
   $("#heroMeta").innerHTML = `<b>${subs}</b> 个科目 · <b>${nFile}</b> 份资料 · <b>${nLink}</b> 门视频 · <b>${nBook}</b> 本电子书&ensp;更新于 ${esc(MANIFEST.generated)}`;
-  $("#upSubject").innerHTML = subs.map((s) => `<option>${esc(s)}</option>`).join("");
+  $("#upSubject").innerHTML = subNames.map((s) => `<option>${esc(s)}</option>`).join("");
   $("#pathList").innerHTML = MANIFEST.items.filter((x) => x.path).map((x) => `<option value="${esc(x.path)}">`).join("");
   renderChips(); renderSidebar(); render();
 }
@@ -163,7 +164,7 @@ function route() {
   const admin = location.hash === "#admin";
   $("#viewHome").hidden = admin;
   $("#viewAdmin").hidden = !admin;
-  if (admin && TOKEN) { $("#adminLoginBox").hidden = true; $("#adminPanel").hidden = false; }
+  if (admin && TOKEN()) { $("#adminLoginBox").hidden = true; $("#adminPanel").hidden = false; }
 }
 
 /* ---------- 管理台 ---------- */
