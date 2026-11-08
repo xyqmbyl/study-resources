@@ -11,6 +11,11 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 [hidden] { display: none !important; }
+
+/* 壁纸背景层：固定置底、低透明度，卡片均不透明，不影响任何排版与可读性 */
+#wallpaper { position: fixed; inset: 0; z-index: -1; background-size: cover; background-position: center;
+  opacity: .18; pointer-events: none; }
+[data-theme="dark"] #wallpaper { opacity: .1; }
 html { scroll-behavior: smooth; }
 body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.6; transition: background .3s; }
 

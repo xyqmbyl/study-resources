@@ -35,6 +35,23 @@ $("#btnTheme").onclick = () => {
   applyTheme(t);
 };
 
+/* ---------- 壁纸 ---------- */
+const WALLPAPERS = ["", "assets/wp-1.jpg", "assets/wp-2.jpg", "assets/wp-3.jpg"]; // "" = 关闭
+function applyWallpaper() {
+  const i = Math.min(+(localStorage.getItem("wp") || 0), WALLPAPERS.length - 1);
+  const el = $("#wallpaper");
+  if (WALLPAPERS[i]) el.style.backgroundImage = `url("${WALLPAPERS[i]}")`;
+  else el.style.backgroundImage = "";
+  const btn = $("#btnWallpaper");
+  btn.textContent = i ? `🖼️ ${i}` : "🖼️";
+  btn.title = i ? `壁纸 ${i}/${WALLPAPERS.length - 1}，点击切换` : "开启壁纸，点击切换";
+}
+$("#btnWallpaper").onclick = () => {
+  const next = (+(localStorage.getItem("wp") || 0) + 1) % WALLPAPERS.length;
+  localStorage.setItem("wp", next);
+  applyWallpaper();
+};
+
 /* ---------- 加载与索引 ---------- */
 async function loadManifest() {
   try {
@@ -135,11 +152,29 @@ function scrollToResults() {
   window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
 }
 
+/* ---------- 搜索：中文长词按 2 字拆分匹配 + 常用别名，无命中时 Fuse 兜底 ---------- */
+const SEARCH_ALIAS = { "高数": "高等数学", "线代": "线性代数", "计网": "计算机网络", "计组": "计算机组成原理", "大物": "大学物理", "毛概": "毛泽东思想概论" };
+const gramsOf = (t) => /^[a-z0-9]+$/.test(t) ? [t] : Array.from({ length: Math.ceil(t.length / 2) }, (_, i) => t.slice(i * 2, i * 2 + 2));
+function smartSearch(q) {
+  q = q.toLowerCase().trim();
+  const toks = q.split(/\s+/).filter(Boolean);
+  const alts = toks.map((t) => {
+    const base = gramsOf(t);
+    const a = SEARCH_ALIAS[t];
+    return a ? [base, gramsOf(a.toLowerCase())] : [base]; // 别名是「或」的备选，不是追加
+  });
+  const hit = MANIFEST.items.filter((it) => {
+    const s = (it._s || "").toLowerCase();
+    return alts.every((pair) => pair.some((gs) => gs.every((g) => s.includes(g))));
+  });
+  return hit.length ? hit : FUSE.search(q).map((r) => r.item);
+}
+
 function render() {
   let items = MANIFEST.items;
+  if (state.q) items = smartSearch(state.q); // 先搜索，再让目录/类型筛选继续生效
   if (state.folder) items = items.filter((x) => underFolder(x, state.folder));
   if (state.type !== "all") items = items.filter((x) => x.type === state.type);
-  if (state.q) items = FUSE.search(state.q).map((r) => r.item);
   const box = document.getElementById("results");
   if (!items.length) {
     box.innerHTML = `<p class="empty">${state.q ? "🔍 没找到「" + esc(state.q) + "」，换个关键词试试？" : "（空）"}</p>`;
@@ -326,5 +361,6 @@ $("#searchInput").addEventListener("input", (e) => {
 });
 
 initTheme();
+applyWallpaper();
 loadManifest();
 route();
