@@ -35,22 +35,93 @@ $("#btnTheme").onclick = () => {
   applyTheme(t);
 };
 
-/* ---------- 壁纸 ---------- */
-const WALLPAPERS = ["", "assets/wp-1.jpg", "assets/wp-2.jpg", "assets/wp-3.jpg"]; // "" = 关闭
+/* ---------- 壁纸（内置 3 张 + 本地自定义，自定义图压缩后存 IndexedDB） ---------- */
+const WALLPAPERS = ["", "assets/wp-1.jpg", "assets/wp-2.jpg", "assets/wp-3.jpg", "@custom"]; // "" = 关闭, "@custom" = 自定义
+const WP_LABELS = ["🖼️", "🖼️ 1", "🖼️ 2", "🖼️ 3", "🖼️ ★"];
+let customWpUrl = "";
+
+function wpDb() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open("wallpaper", 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore("wp");
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function saveCustomWp(blob) {
+  const db = await wpDb();
+  await new Promise((res, rej) => {
+    const tx = db.transaction("wp", "readwrite");
+    tx.objectStore("wp").put(blob, "custom");
+    tx.oncomplete = res;
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function loadCustomWp() {
+  try {
+    const db = await wpDb();
+    const blob = await new Promise((res) => {
+      const rq = db.transaction("wp").objectStore("wp").get("custom");
+      rq.onsuccess = () => res(rq.result || null);
+      rq.onerror = () => res(null);
+    });
+    if (blob) customWpUrl = URL.createObjectURL(blob);
+  } catch (e) { /* 无痕模式等场景降级为无自定义壁纸 */ }
+}
+
+// 前端压缩：最长边压到 1600px、JPEG q0.75，控制存储体积
+function compressWallpaper(file) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * scale);
+      c.height = Math.round(img.height * scale);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob((b) => (b ? res(b) : rej(new Error("压缩失败"))), "image/jpeg", 0.75);
+    };
+    img.onerror = () => rej(new Error("图片读取失败"));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+function pickWallpaper() {
+  const inp = document.createElement("input");
+  inp.type = "file";
+  inp.accept = "image/*";
+  inp.onchange = async () => {
+    const f = inp.files[0];
+    if (!f) return;
+    try {
+      const blob = await compressWallpaper(f);
+      await saveCustomWp(blob);
+      if (customWpUrl) URL.revokeObjectURL(customWpUrl);
+      customWpUrl = URL.createObjectURL(blob);
+      localStorage.setItem("wp", WALLPAPERS.length - 1);
+      applyWallpaper();
+    } catch (e) { alert("壁纸设置失败：" + e.message); }
+  };
+  inp.click();
+}
+
 function applyWallpaper() {
   const i = Math.min(+(localStorage.getItem("wp") || 0), WALLPAPERS.length - 1);
   const el = $("#wallpaper");
-  if (WALLPAPERS[i]) el.style.backgroundImage = `url("${WALLPAPERS[i]}")`;
+  if (WALLPAPERS[i] === "@custom") el.style.backgroundImage = customWpUrl ? `url("${customWpUrl}")` : "";
+  else if (WALLPAPERS[i]) el.style.backgroundImage = `url("${WALLPAPERS[i]}")`;
   else el.style.backgroundImage = "";
   const btn = $("#btnWallpaper");
-  btn.textContent = i ? `🖼️ ${i}` : "🖼️";
-  btn.title = i ? `壁纸 ${i}/${WALLPAPERS.length - 1}，点击切换` : "开启壁纸，点击切换";
+  btn.textContent = WP_LABELS[i];
+  btn.title = "点击切换壁纸（关/1/2/3/自定义），右键上传自定义壁纸";
 }
 $("#btnWallpaper").onclick = () => {
   const next = (+(localStorage.getItem("wp") || 0) + 1) % WALLPAPERS.length;
+  if (next === WALLPAPERS.length - 1 && !customWpUrl) { pickWallpaper(); return; } // 切到自定义但还没传过 → 直接弹选图
   localStorage.setItem("wp", next);
   applyWallpaper();
 };
+$("#btnWallpaper").oncontextmenu = (e) => { e.preventDefault(); pickWallpaper(); }; // 右键随时上传/更换
 
 /* ---------- 加载与索引 ---------- */
 async function loadManifest() {
@@ -361,6 +432,6 @@ $("#searchInput").addEventListener("input", (e) => {
 });
 
 initTheme();
-applyWallpaper();
+loadCustomWp().then(applyWallpaper); // 先取本地自定义壁纸再应用，避免闪烁到空背景
 loadManifest();
 route();
