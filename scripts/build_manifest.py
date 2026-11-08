@@ -16,7 +16,7 @@ BRANCH = "main"
 JSDELIVR_MAX = 20 * 1024 * 1024  # jsDelivr 单文件上限 20MB
 CN_TZ = timezone(timedelta(hours=8))
 
-SKIP_DIRS = {".git", ".github", "site", "scripts"}
+SKIP_DIRS = {".git", ".github", "site", "scripts", ".v2c"}
 SUBJECT_META = {  # 拼音首字母（检索用）与图标
     "C语言": ("cy", "🇨"), "JAVA": ("java", "☕"), "c++": ("cpp", "➕"),
     "web程序设计": ("web", "🌐"), "中南ppt模版": ("ppt", "📊"),
