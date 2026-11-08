@@ -280,7 +280,10 @@ $("#navCustomBtn").addEventListener("click", openNavModal);
     rows().forEach((r, i) => {
       if (r === row) return;
       const from = rows().indexOf(row);
-      const off = (from < target && i > from && i <= target) || (target < from && i >= target && i < from) ? -h : 0;
+      // 向下拖：中间行整体上移；向上拖：中间行整体下移（方向相反，不可统一用 -h）
+      let off = 0;
+      if (from < target && i > from && i <= target) off = -h;
+      else if (target < from && i >= target && i < from) off = h;
       r.style.transform = off ? `translateY(${off}px)` : "";
     });
   });

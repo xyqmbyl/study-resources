@@ -128,7 +128,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 
 /* 弹层 */
 .modal { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 20px; }
-.modal-box { position: relative; width: min(920px, 96vw); background: var(--card); border-radius: 16px; padding: 12px; }
+.modal-box { position: relative; width: min(920px, 96vw); max-height: min(86vh, 100%); overflow-y: auto; overscroll-behavior: contain; background: var(--card); border-radius: 16px; padding: 12px; }
 #videoFrame { aspect-ratio: 16/9; }
 #videoFrame iframe { width: 100%; height: 100%; border: 0; border-radius: 10px; }
 .modal-close { position: absolute; top: -14px; right: -14px; width: 32px; height: 32px; border-radius: 50%;
