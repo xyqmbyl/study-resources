@@ -753,27 +753,37 @@ const fileB64 = (file) => new Promise((res, rej) => {
 // Git Data API：把一批变更（上传/替换/移动/删除）打包成单个 commit，避免逐文件提交
 // change: {op:"put", path, content(b64)} | {op:"rm", path} | {op:"mv", from, to}
 // dest: 提交目标，默认本仓库 main；投稿模式传 {repo:"用户名/study-resources", branch:"submit-xxx"}
+// 远端 main 在读取 HEAD 与写入之间被并发推进（如 Actions 重建索引）时会 422
+// "not a fast forward"，此处自动重读 HEAD 重试（blob sha 内容寻址，可直接复用）
 async function commitChanges(changes, message, dest = { repo: REPO, branch: "main" }) {
-  const ref = await ghApi(`/repos/${dest.repo}/git/ref/heads/${dest.branch}`);
-  const head = await ghApi(`/repos/${dest.repo}/git/commits/${ref.object.sha}`);
-  const tree = [];
-  for (const ch of changes) {
-    if (ch.op === "put") {
-      const b = await ghApi(`/repos/${dest.repo}/git/blobs`, { method: "POST", body: { content: ch.content, encoding: "base64" } });
-      tree.push({ path: ch.path, mode: "100644", type: "blob", sha: b.sha });
-    } else if (ch.op === "mv") {
-      const sha = ch.sha || (await ghApi(`/repos/${dest.repo}/contents/${encodeURI(ch.from)}`)).sha;
-      tree.push({ path: ch.to, mode: "100644", type: "blob", sha });
-      tree.push({ path: ch.from, mode: "100644", type: "blob", sha: null });
-    } else if (ch.op === "rm") {
-      tree.push({ path: ch.path, mode: "100644", type: "blob", sha: null });
+  for (let attempt = 1; ; attempt++) {
+    const ref = await ghApi(`/repos/${dest.repo}/git/ref/heads/${dest.branch}`);
+    const head = await ghApi(`/repos/${dest.repo}/git/commits/${ref.object.sha}`);
+    const tree = [];
+    for (const ch of changes) {
+      if (ch.op === "put") {
+        const b = await ghApi(`/repos/${dest.repo}/git/blobs`, { method: "POST", body: { content: ch.content, encoding: "base64" } });
+        tree.push({ path: ch.path, mode: "100644", type: "blob", sha: b.sha });
+      } else if (ch.op === "mv") {
+        const sha = ch.sha || (await ghApi(`/repos/${dest.repo}/contents/${encodeURI(ch.from)}`)).sha;
+        tree.push({ path: ch.to, mode: "100644", type: "blob", sha });
+        tree.push({ path: ch.from, mode: "100644", type: "blob", sha: null });
+      } else if (ch.op === "rm") {
+        tree.push({ path: ch.path, mode: "100644", type: "blob", sha: null });
+      }
+    }
+    if (!tree.length) return null;
+    const nt = await ghApi(`/repos/${dest.repo}/git/trees`, { method: "POST", body: { base_tree: head.tree.sha, tree } });
+    const nc = await ghApi(`/repos/${dest.repo}/git/commits`, { method: "POST", body: { message, tree: nt.sha, parents: [ref.object.sha] } });
+    try {
+      await ghApi(`/repos/${dest.repo}/git/refs/heads/${dest.branch}`, { method: "PATCH", body: { sha: nc.sha } });
+      return nc.sha;
+    } catch (e) {
+      // HEAD 被并发推进：基于最新 HEAD 重来，最多 3 次
+      if (attempt < 3 && String(e.message).startsWith("GitHub API 422")) continue;
+      throw e;
     }
   }
-  if (!tree.length) return null;
-  const nt = await ghApi(`/repos/${dest.repo}/git/trees`, { method: "POST", body: { base_tree: head.tree.sha, tree } });
-  const nc = await ghApi(`/repos/${dest.repo}/git/commits`, { method: "POST", body: { message, tree: nt.sha, parents: [ref.object.sha] } });
-  await ghApi(`/repos/${dest.repo}/git/refs/heads/${dest.branch}`, { method: "PATCH", body: { sha: nc.sha } });
-  return nc.sha;
 }
 
 /* --- 投稿模式（无写权限）：自动 Fork 本仓库到用户账号并创建投稿分支 --- */
