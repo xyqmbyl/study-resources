@@ -1,0 +1,32 @@
+name: 🐛 报告问题（失效链接 / 文件错误）
+description: 链接下载不了、文件损坏、内容有误、索引没更新等问题
+title: "[问题] "
+labels: ["bug"]
+body:
+  - type: input
+    id: where
+    attributes:
+      label: 在哪里发现的问题？
+      description: 网站页面地址、文件路径或仓库名称
+      placeholder: 例：网站搜「操作系统期末」第一条，或 高数/2025期末真题.pdf
+    validations:
+      required: true
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 问题类型
+      options:
+        - 下载链接失效（jsDelivr / GitHub / Release 都打不开）
+        - 文件损坏、打不开或内容有误
+        - 网站搜索 / 目录显示异常
+        - 索引没更新（上传后网站看不到新文件）
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: 详细描述
+      description: 最好附截图；说明浏览器/设备（手机还是电脑）也很有帮助
+    validations:
+      required: true

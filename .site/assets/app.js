@@ -128,7 +128,7 @@ async function loadManifest() {
   try {
     MANIFEST = await (await fetch("manifest.json", { cache: "no-cache" })).json();
   } catch (e) {
-    document.getElementById("results").innerHTML = `<p class="empty">索引加载失败（本地预览请先运行 scripts/build_manifest.py）</p>`;
+    document.getElementById("results").innerHTML = `<p class="empty">索引加载失败（本地预览请先运行 .scripts/build_manifest.py）</p>`;
     return;
   }
   MANIFEST.items.forEach((it) => (it._s = [it.name, it.title, it.subject, it.folder, it.note, it.author, it.py, ...(it.tags || [])].filter(Boolean).join(" ")));
@@ -140,8 +140,8 @@ async function loadManifest() {
   const nLink = MANIFEST.items.filter((x) => x.type === "link").length;
   const nBook = MANIFEST.items.filter((x) => x.type === "book").length;
   $("#heroMeta").innerHTML = `<b>${subs}</b> 个科目 · <b>${nFile}</b> 份资料 · <b>${nLink}</b> 门视频 · <b>${nBook}</b> 本电子书&ensp;更新于 ${esc(MANIFEST.generated)}`;
-  $("#upSubject").innerHTML = subNames.map((s) => `<option>${esc(s)}</option>`).join("");
-  $("#pathList").innerHTML = MANIFEST.items.filter((x) => x.path).map((x) => `<option value="${esc(x.path)}">`).join("");
+  $("#folderList").innerHTML = [...new Set(MANIFEST.items.filter((x) => x.folder).map((x) => x.subject + "/" + x.folder))]
+    .map((f) => `<option value="${esc(f)}">`).join("");
   renderChips(); renderSidebar(); render();
 }
 
@@ -364,57 +364,378 @@ function route() {
   const admin = location.hash === "#admin";
   $("#viewHome").hidden = admin;
   $("#viewAdmin").hidden = !admin;
-  if (admin && TOKEN()) { $("#adminLoginBox").hidden = true; $("#adminPanel").hidden = false; }
+  if (admin && TOKEN()) enterAdmin();
 }
 
 /* ---------- 管理台 ---------- */
 const TOKEN = () => localStorage.getItem("admin_token");
 const auth = (t) => ({ Authorization: `Bearer ${t}` });
+let CAN_WRITE = false;
+
+// 通用 GitHub API 封装：失败时抛出带状态码与错误信息的异常
+async function ghApi(path, opts = {}) {
+  const r = await fetch("https://api.github.com" + path, {
+    method: opts.method || "GET",
+    headers: { ...auth(TOKEN()), "Content-Type": "application/json", ...(opts.headers || {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = r.status === 204 ? null : await r.json().catch(() => null);
+  if (!r.ok) throw new Error(`GitHub API ${r.status}${data?.message ? "：" + data.message : ""}`);
+  return data;
+}
+
+const fileB64 = (file) => new Promise((res, rej) => {
+  const fr = new FileReader();
+  fr.onload = () => res(fr.result.split(",")[1]);
+  fr.onerror = () => rej(new Error("读取文件失败"));
+  fr.readAsDataURL(file);
+});
+
+// Git Data API：把一批变更（上传/替换/移动/删除）打包成单个 commit，避免逐文件提交
+// change: {op:"put", path, content(b64)} | {op:"rm", path} | {op:"mv", from, to}
+async function commitChanges(changes, message) {
+  const ref = await ghApi(`/repos/${REPO}/git/ref/heads/main`);
+  const head = await ghApi(`/repos/${REPO}/git/commits/${ref.object.sha}`);
+  const tree = [];
+  for (const ch of changes) {
+    if (ch.op === "put") {
+      const b = await ghApi(`/repos/${REPO}/git/blobs`, { method: "POST", body: { content: ch.content, encoding: "base64" } });
+      tree.push({ path: ch.path, mode: "100644", type: "blob", sha: b.sha });
+    } else if (ch.op === "mv") {
+      const sha = ch.sha || (await ghApi(`/repos/${REPO}/contents/${encodeURI(ch.from)}`)).sha;
+      tree.push({ path: ch.to, mode: "100644", type: "blob", sha });
+      tree.push({ path: ch.from, mode: "100644", type: "blob", sha: null });
+    } else if (ch.op === "rm") {
+      tree.push({ path: ch.path, mode: "100644", type: "blob", sha: null });
+    }
+  }
+  if (!tree.length) return null;
+  const nt = await ghApi(`/repos/${REPO}/git/trees`, { method: "POST", body: { base_tree: head.tree.sha, tree } });
+  const nc = await ghApi(`/repos/${REPO}/git/commits`, { method: "POST", body: { message, tree: nt.sha, parents: [ref.object.sha] } });
+  await ghApi(`/repos/${REPO}/git/refs/heads/main`, { method: "PATCH", body: { sha: nc.sha } });
+  return nc.sha;
+}
+
+const decodeB64Text = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\n/g, "")), (c) => c.charCodeAt(0)));
+const encodeB64 = (str) => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+const relOf = (v) => String(v || "").trim().replace(/^\/+|\/+$/g, "");
+const isDl = (it) => it.urls?.dl && !it.urls?.raw; // Release 通道大文件（不在 git 里）
+
+function log(msg, sel) { const el = $(sel); el.textContent += msg + "\n"; el.scrollTop = el.scrollHeight; }
+
+/* --- 登录 / 权限 --- */
 $("#adminLogin").onclick = async () => {
   const token = $("#adminToken").value.trim();
   if (!token) return;
-  const r = await fetch(`https://api.github.com/repos/${REPO}`, { headers: auth(token) });
-  if (!r.ok) return alert("✗ Token 无效或无仓库权限（" + r.status + "）");
-  localStorage.setItem("admin_token", token);
-  $("#adminLoginBox").hidden = true;
-  $("#adminPanel").hidden = false;
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}`, { headers: auth(token) });
+    if (!r.ok) return alert("✗ Token 无效或被撤销（" + r.status + "）");
+    CAN_WRITE = !!((await r.json()).permissions || {}).push;
+    localStorage.setItem("admin_token", token);
+    enterAdmin();
+  } catch (e) { alert("网络错误：" + e.message); }
 };
 $("#adminLogout").onclick = () => { localStorage.removeItem("admin_token"); location.hash = ""; location.reload(); };
 
-$("#upBtn").onclick = async () => {
-  const files = [...$("#upFile").files], subject = $("#upSubject").value;
-  if (!files.length) return log("请先选择文件", "#upLog");
-  for (const f of files) {
-    log(`⬆ ${f.name} 上传中…`, "#upLog");
-    log((await putFile(`${subject}/${f.name}`, f, null)) ? `✓ ${f.name}` : `✗ ${f.name} 失败`, "#upLog");
-  }
-  log("✔ 完成，索引重建约需 1 分钟", "#upLog");
-};
-
-$("#rpBtn").onclick = async () => {
-  const path = $("#rpPath").value.trim(), file = $("#rpFile").files[0];
-  if (!path || !file) return log("请填写路径并选择文件", "#rpLog");
-  const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${encodeURI(path)}`, { headers: auth(TOKEN()) });
-  if (!r.ok) return log("✗ 仓库中未找到该路径", "#rpLog");
-  const sha = (await r.json()).sha;
-  log("提交替换中…", "#rpLog");
-  log((await putFile(path, file, sha)) ? "✔ 替换成功，索引重建中…" : "✗ 提交失败", "#rpLog");
-};
-
-async function putFile(path, file, sha) {
-  const b64 = await new Promise((res) => {
-    const fr = new FileReader();
-    fr.onload = () => res(fr.result.split(",")[1]);
-    fr.readAsDataURL(file);
-  });
-  const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${encodeURI(path)}`, {
-    method: "PUT",
-    headers: { ...auth(TOKEN()), "Content-Type": "application/json" },
-    body: JSON.stringify({ message: `upload: ${path}`, content: b64, sha }),
-  });
-  return r.ok;
+async function enterAdmin() {
+  $("#adminLoginBox").hidden = true;
+  $("#adminPanel").hidden = false;
+  // 刷新权限（Token 可能已过期/降权）
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO}`, { headers: auth(TOKEN()) });
+    CAN_WRITE = r.ok ? !!((await r.json()).permissions || {}).push : false;
+  } catch { CAN_WRITE = false; }
+  for (let i = 0; i < 100 && !MANIFEST; i++) await new Promise((r) => setTimeout(r, 100));
+  $("#adminMsg").hidden = CAN_WRITE;
+  $("#adminMsg").textContent = CAN_WRITE
+    ? ""
+    : "⚠ 当前 Token 无仓库写权限：只能浏览文件列表。请换用勾选了 Contents 读写权限的 Token。";
+  document.querySelectorAll('.tab[data-tab="up"],.tab[data-tab="nf"],#fmNewFolder,#upRow').forEach((el) => (el.style.display = CAN_WRITE ? "" : "none"));
+  if (!MANIFEST) return log("索引未加载完成，请稍后刷新", "#fmLog");
+  const subs = Object.keys(MANIFEST.subjects);
+  $("#fmSubject").innerHTML = `<option value="">全部科目</option>` + subs.map((s) => `<option>${esc(s)}</option>`).join("");
+  $("#upSubject").innerHTML = subs.map((s) => `<option>${esc(s)}</option>`).join("");
+  $("#mvSubject").innerHTML = subs.map((s) => `<option>${esc(s)}</option>`).join("");
+  $("#folderList").innerHTML = [...new Set(MANIFEST.items.filter((x) => x.folder).map((x) => x.subject + "/" + x.folder))]
+    .map((f) => `<option value="${esc(f)}">`).join("");
+  fmState = { subject: "", folder: "" };
+  renderFm();
 }
-function log(msg, sel) { const el = $(sel); el.textContent += msg + "\n"; el.scrollTop = el.scrollHeight; }
+
+/* --- 标签页 --- */
+document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => {
+  document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
+  document.querySelectorAll(".tabpane").forEach((p) => (p.hidden = p.id !== "tab-" + t.dataset.tab));
+}));
+
+/* --- 文件管理器 --- */
+let fmState = { subject: "", folder: "" };
+$("#fmSubject").onchange = (e) => { fmState = { subject: e.target.value, folder: "" }; renderFm(); };
+
+function fmList() {
+  const prefix = fmState.subject ? fmState.subject + (fmState.folder ? "/" + fmState.folder : "") + "/" : "";
+  const dirs = new Map(), files = [];
+  for (const it of MANIFEST.items) {
+    if (it.type !== "file" || !it.path || !it.path.startsWith(prefix)) continue;
+    const rest = it.path.slice(prefix.length);
+    if (!rest || rest === ".gitkeep") continue;
+    const slash = rest.indexOf("/");
+    if (slash === -1) files.push(it);
+    else dirs.set(rest.slice(0, slash), true);
+  }
+  return { dirs: [...dirs.keys()], files };
+}
+
+function renderFm() {
+  const { dirs, files } = fmList();
+  const parts = [fmState.subject, ...fmState.folder.split("/")].filter(Boolean);
+  let acc = "";
+  $("#fmCrumb").innerHTML =
+    `<a data-p="">🏠 全部</a>` +
+    parts.map((p) => { acc = acc ? acc + "/" + p : p; return ` <i>/</i> <a data-p="${esc(acc)}">${esc(p)}</a>`; }).join("");
+  $("#fmCrumb").querySelectorAll("a").forEach((a) => (a.onclick = () => {
+    const p = a.dataset.p;
+    if (!p) { fmState = { subject: "", folder: "" }; }
+    else { fmState.subject = p.split("/")[0]; fmState.folder = p.includes("/") ? p.slice(fmState.subject.length + 1) : ""; }
+    $("#fmSubject").value = fmState.subject;
+    renderFm();
+  }));
+  const ops = (it) => CAN_WRITE
+    ? `<span class="fm-ops">
+        <button class="fm-op" data-act="mv" data-id="${it.id}">移动/改名</button>
+        <button class="fm-op" data-act="rep" data-id="${it.id}">替换</button>
+        <button class="fm-op danger" data-act="rm" data-id="${it.id}">删除</button>
+      </span>` : "";
+  $("#fmList").innerHTML =
+    dirs.map((d) => `<div class="fm-row"><span class="fm-ico">📁</span><a class="fm-name" data-dir="${esc(d)}">${esc(d)}</a><span class="fm-meta">文件夹</span></div>`).join("") +
+    files.map((it) => {
+      const dl = it.urls?.dl && !it.urls?.raw;
+      return `<div class="fm-row"><span class="fm-ico">📄</span>
+        <span class="fm-name" title="${esc(it.path)}">${esc(it.name)}.${esc(it.ext)}</span>
+        <span class="fm-meta">${dl ? `<span class="badge dl">Release ${fmtSize(it.size || 0)}</span>` : fmtSize(it.size || 0)}</span>
+        ${ops(it)}</div>`;
+    }).join("") || `<div class="empty" style="padding:30px 0">（空目录）</div>`;
+}
+
+$("#fmList").addEventListener("click", async (e) => {
+  const dir = e.target.dataset.dir;
+  if (dir !== undefined && dir !== null) { fmState.folder = fmState.folder ? fmState.folder + "/" + dir : dir; return renderFm(); }
+  const btn = e.target.closest("[data-act]");
+  if (!btn) return;
+  const it = MANIFEST.items.find((x) => x.id === btn.dataset.id);
+  if (!it) return;
+  if (btn.dataset.act === "rm") fmRemove(it);
+  else if (btn.dataset.act === "mv") fmMoveDialog(it);
+  else if (btn.dataset.act === "rep") fmReplace(it);
+});
+
+$("#fmNewFolder").onclick = async () => {
+  const name = prompt("新文件夹名称（将在当前目录下创建）：");
+  if (!name) return;
+  const base = [fmState.subject, fmState.folder].filter(Boolean).join("/");
+  await mkdir(base ? `${base}/${name}` : name);
+};
+
+async function mkdir(rel, sel = "#fmLog") {
+  try {
+    await commitChanges([{ op: "put", path: `${rel}/.gitkeep`, content: "" }], `mkdir: ${rel}`);
+    log(`✔ 已创建 ${rel}/，索引重建约 1 分钟`, sel);
+    renderFm();
+  } catch (e) { log("✗ " + e.message, sel); }
+}
+
+/* --- 删除 --- */
+async function fmRemove(it) {
+  const dl = it.urls?.dl && !it.urls?.raw;
+  if (!confirm(`确定删除「${it.path}」？${dl ? "（会同时删除 Release 附件）" : "此操作直接提交到仓库。"}`)) return;
+  try {
+    if (dl) {
+      const info = await releaseAssetInfo(it);
+      if (info.asset) await ghApi(`/repos/${REPO}/releases/assets/${info.asset.id}`, { method: "DELETE" });
+      delete info.map[it.path];
+      await saveReleaseMap(info.map, `release: 删除 ${it.path}`);
+      log("✔ Release 附件已删除，映射已更新", "#fmLog");
+    } else {
+      await commitChanges([{ op: "rm", path: it.path }], `delete: ${it.path}`);
+      log(`✔ 已删除，索引重建约 1 分钟`, "#fmLog");
+    }
+    renderFm();
+  } catch (e) { log("✗ " + e.message, "#fmLog"); }
+}
+
+/* --- 替换 --- */
+let fmRepTarget = null;
+function fmReplace(it) { fmRepTarget = it; $("#fmFile").click(); }
+$("#fmFile").onchange = async (e) => {
+  const f = e.target.files[0], it = fmRepTarget;
+  e.target.value = "";
+  if (!f || !it) return;
+  const dl = it.urls?.dl && !it.urls?.raw;
+  if (!confirm(`用「${f.name}」替换「${it.path}」？`)) return;
+  try {
+    log("提交替换中…", "#fmLog");
+    if (dl) {
+      const info = await releaseAssetInfo(it);
+      if (info.asset) await ghApi(`/repos/${REPO}/releases/assets/${info.asset.id}`, { method: "DELETE" });
+      const up = await releaseUpload(f, info.rel.id);
+      delete info.map[it.path];
+      info.map[it.path] = typeof info.meta === "string"
+        ? up.browser_download_url
+        : { ...info.meta, url: up.browser_download_url, size: up.size };
+      await saveReleaseMap(info.map, `release: 替换 ${it.path}`);
+      log("✔ Release 附件已替换，索引重建约 1 分钟", "#fmLog");
+    } else {
+      await commitChanges([{ op: "put", path: it.path, content: await fileB64(f) }], `update: ${it.path}`);
+      log(`✔ 替换成功，索引重建约 1 分钟`, "#fmLog");
+    }
+    renderFm();
+  } catch (e) { log("✗ " + e.message, "#fmLog"); }
+};
+
+/* --- 移动 / 改名 --- */
+let mvItem = null;
+function fmMoveDialog(it) {
+  mvItem = it;
+  const dl = it.urls?.dl && !it.urls?.raw;
+  $("#mvFrom").textContent = it.path + (dl ? " · Release 通道大文件，改名会同步修改附件名与下载映射" : " · 可改科目/子文件夹/文件名，单 commit 完成，不限文件大小");
+  $("#mvSub").value = it.folder || "";
+  $("#mvName").value = it.name + (it.ext && it.ext !== "文件" ? "." + it.ext : "");
+  $("#mvSubject").value = it.subject;
+  $("#mvLog").textContent = "";
+  $("#moveModal").hidden = false;
+}
+$("#mvOk").onclick = async () => {
+  if (!mvItem) return;
+  const subject = $("#mvSubject").value;
+  const sub = relOf($("#mvSub").value);
+  const name = $("#mvName").value.trim();
+  if (!name || name.includes("/")) return log("文件名不能为空或含 /", "#mvLog");
+  const to = `${subject}${sub ? "/" + sub : ""}/${name}`;
+  try {
+    if (isDl(mvItem)) {
+      // Release 通道：改名同步改附件名 + 更新映射
+      const info = await releaseAssetInfo(mvItem);
+      if (info.asset && name !== info.asset.name) await ghApi(`/repos/${REPO}/releases/assets/${info.asset.id}`, { method: "PATCH", body: { name } });
+      const url = `https://github.com/${REPO}/releases/download/${info.tag}/${name}`;
+      delete info.map[mvItem.path];
+      info.map[to] = typeof info.meta === "string" ? url : { ...info.meta, url };
+      await saveReleaseMap(info.map, `release: ${mvItem.path} 改名为 ${name}`);
+      log("✔ Release 附件已改名并更新映射，索引重建约 1 分钟", "#fmLog");
+    } else {
+      if (to === mvItem.path) { $("#moveModal").hidden = true; return; }
+      await commitChanges([{ op: "mv", from: mvItem.path, to }], `move: ${mvItem.path} → ${to}`);
+      log(`✔ 已移动到 ${to}，索引重建约 1 分钟`, "#fmLog");
+    }
+    $("#moveModal").hidden = true;
+    renderFm();
+  } catch (e) { log("✗ " + e.message, "#mvLog"); }
+};
+
+/* --- Release 大文件辅助 --- */
+async function releaseAssetInfo(it) {
+  const r = await ghApi(`/repos/${REPO}/contents/${encodeURI(".scripts/release-assets.json")}`);
+  const map = JSON.parse(decodeB64Text(r.content));
+  const meta = map[it.path];
+  if (!meta) throw new Error("release-assets.json 中找不到该文件的映射");
+  const url = typeof meta === "string" ? meta : meta.url;
+  const tag = (url.match(/releases\/download\/([^/]+)\//) || [])[1] || "v1.0";
+  const rel = await ghApi(`/repos/${REPO}/releases/tags/${encodeURIComponent(tag)}`);
+  const asset = rel.assets.find((a) => a.name === decodeURIComponent(url.split("/").pop()));
+  return { map, meta, url, tag, rel, asset };
+}
+async function saveReleaseMap(map, message) {
+  await commitChanges([{ op: "put", path: ".scripts/release-assets.json", content: encodeB64(JSON.stringify(map, null, 2)) }], message);
+}
+// 附件直传走 uploads.github.com；浏览器可能被 CORS 拦，失败时提示手动到 Release 页上传
+async function releaseUpload(file, releaseId) {
+  const r = await fetch(`https://uploads.github.com/repos/${REPO}/releases/${releaseId}/assets?name=${encodeURIComponent(file.name)}`, {
+    method: "POST", headers: { Authorization: `Bearer ${TOKEN()}` }, body: file,
+  });
+  if (!r.ok) throw new Error(`Release 附件上传失败（${r.status}）：浏览器直传被拦时请到 GitHub Release 页手动上传`);
+  return r.json();
+}
+
+/* --- 上传 --- */
+let upQueue = []; // {file, rel} rel = 相对目标科目的路径
+const drop = $("#dropZone");
+drop.onclick = () => $("#upFile").click();
+$("#upDirBtn").onclick = () => $("#upDir").click();
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = (e) => {
+  e.preventDefault();
+  drop.classList.remove("over");
+  addUpFiles([...e.dataTransfer.files].map((f) => ({ f, rel: f.name })));
+};
+$("#upFile").onchange = (e) => {
+  addUpFiles([...e.target.files].map((f) => ({ f, rel: f.name })));
+  e.target.value = "";
+};
+$("#upDir").onchange = (e) => {
+  // 整目录上传：保留相对路径；顶层不是已有科目时并入所选科目
+  const subs = new Set(Object.keys(MANIFEST?.subjects || {}));
+  addUpFiles([...e.target.files].map((f) => {
+    const rel = f.webkitRelativePath || f.name;
+    if (subs.has(rel.split("/")[0])) return { f, rel };
+    return { f, rel: rel.split("/").slice(1).join("/") || f.name };
+  }));
+  e.target.value = "";
+};
+
+function addUpFiles(list) {
+  for (const item of list) {
+    if (!item.rel || item.rel.split("/").pop() === ".gitkeep") continue;
+    if (!upQueue.some((x) => x.rel === item.rel && x.f.size === item.f.size)) upQueue.push(item);
+  }
+  renderUpList();
+}
+function renderUpList() {
+  const subject = $("#upSubject").value;
+  const sub = relOf($("#upSub").value);
+  $("#upList").innerHTML = upQueue.map((it, i) => {
+    const p = `${subject}${sub ? "/" + sub : ""}/${it.rel}`;
+    const dup = MANIFEST?.items?.some((x) => x.path === p);
+    return `<div class="up-item">
+      <span class="up-path" title="${esc(p)}">${esc(p)}${dup ? ' <b class="badge dl">覆盖已有</b>' : ""}</span>
+      <span class="fm-meta">${fmtSize(it.f.size)}</span>
+      <button class="fm-op danger" data-i="${i}">✕</button></div>`;
+  }).join("") || `<div class="empty" style="padding:14px 0">尚未选择文件</div>`;
+  $("#upBtn").textContent = upQueue.length ? `开始上传（${upQueue.length} 个文件）` : "开始上传";
+}
+$("#upSubject").onchange = renderUpList;
+$("#upSub").oninput = renderUpList;
+$("#upList").onclick = (e) => {
+  const b = e.target.closest("[data-i]");
+  if (b) { upQueue.splice(+b.dataset.i, 1); renderUpList(); }
+};
+
+$("#upBtn").onclick = async () => {
+  if (!upQueue.length) return log("请先拖入或选择文件", "#upLog");
+  const subject = $("#upSubject").value;
+  const sub = relOf($("#upSub").value);
+  const base = `${subject}${sub ? "/" + sub : ""}/`;
+  const changes = [];
+  for (const { f, rel } of upQueue) changes.push({ op: "put", path: base + rel, content: await fileB64(f) });
+  const conflicts = changes.filter((c) => MANIFEST?.items?.some((x) => x.path === c.path));
+  if (conflicts.length && !confirm(`以下 ${conflicts.length} 个文件已存在，将被覆盖：\n${conflicts.map((c) => c.path).join("\n")}`)) return;
+  try {
+    log(`⬆ 打包上传 ${changes.length} 个文件（单 commit）…`, "#upLog");
+    $("#upBtn").disabled = true;
+    await commitChanges(changes, `upload: ${changes.length} 个文件到 ${base}`);
+    log("✔ 上传成功，索引重建约 1 分钟后生效", "#upLog");
+    upQueue = [];
+    renderUpList();
+  } catch (e) { log("✗ " + e.message, "#upLog"); }
+  finally { $("#upBtn").disabled = false; }
+};
+
+/* --- 新建文件夹 --- */
+$("#nfBtn").onclick = async () => {
+  const p = relOf($("#nfPath").value), name = $("#nfName").value.trim();
+  if (!name || name.includes("/")) return log("请填写合法的文件夹名（不含 /）", "#nfLog");
+  await mkdir(p ? `${p}/${name}` : name, "#nfLog");
+};
+
 
 /* ---------- 启动 ---------- */
 window.addEventListener("hashchange", route);

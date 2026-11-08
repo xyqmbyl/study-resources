@@ -1,0 +1,60 @@
+name: 📥 求资源 / 补充资料
+description: 想要某科资料、或手上有资料想分享给大家（不用会 git，管理员看到会帮忙上传）
+title: "[求资源] "
+labels: ["资源请求"]
+body:
+  - type: dropdown
+    id: subject
+    attributes:
+      label: 科目
+      description: 资料属于哪门课？没有就选「其他」
+      options:
+        - 高数
+        - 线代
+        - 概率论
+        - C语言
+        - c++
+        - JAVA
+        - 数据结构
+        - 操作系统
+        - 计算机组成原理
+        - 计算机网络(计科)
+        - 软件工程(计科)
+        - 计算机体系结构
+        - 汇编语言
+        - 编译原理
+        - web程序设计
+        - 人工智能
+        - 电路
+        - 英语
+        - 军理
+        - 思修
+        - 习概
+        - 中南ppt模版
+        - 其他
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: 资料名称
+      description: 例如「2025-2026 高数期末真题」「XX 课程全套 PPT」
+      placeholder: 请尽量写全：课程名 + 学期/年份 + 资料类型
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: 说明（想要还是分享？来源/链接？）
+      description: |
+        - **求资源**：说明要什么、用在什么场景（期末复习/考研/补考…）
+        - **分享资源**：给出下载链接（网盘/网盘提取码/图床），或说明愿意通过什么方式提供文件
+        - 如需上传大文件（>100MB），请说明，管理员会给你开 Release 通道
+    validations:
+      required: true
+  - type: input
+    id: location
+    attributes:
+      label: 建议存放位置（可选）
+      description: 希望放进哪个文件夹？格式：科目/子文件夹，如「高数/2026真题」。管理员会参考安排。
+      placeholder: 例：高数/2026真题
