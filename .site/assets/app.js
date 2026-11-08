@@ -165,6 +165,12 @@ function navCust() {
 function saveNavCust() { localStorage.setItem("navCustom", JSON.stringify(NAVCUST || { order: [], hidden: [] })); }
 const navTopOf = (it) => (it.type === "file" && it.path ? it.path.split("/")[0] : topOf(it));
 const navHiddenTop = (it) => navCust().hidden.includes(navTopOf(it));
+// 顶级「科目文件夹」= 文件路径的第一层目录 / 链接电子书的 subject；根目录散落文件不算
+const navTopFolder = (it) => {
+  if (it.type === "file" && it.path) { const d = it.path.split("/").slice(0, -1); return d[0] || null; }
+  return topOf(it);
+};
+const navFolderTops = () => [...new Set(MANIFEST.items.map(navTopFolder).filter(Boolean))];
 function navOrder(names) {
   const { order } = navCust();
   return [...names].sort((a, b) => {
@@ -241,7 +247,7 @@ $("#sidebar").addEventListener("click", (e) => {
 /* ---------- 导航自定义弹窗 ---------- */
 function openNavModal() {
   navCust();
-  $("#navCustList").innerHTML = navOrder([...new Set(MANIFEST.items.map(navTopOf))])
+  $("#navCustList").innerHTML = navOrder(navFolderTops())
     .map((n) => {
       const meta = MANIFEST.subjects[n];
       const off = NAVCUST.hidden.includes(n);
@@ -258,7 +264,7 @@ $("#navCustList").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-mv]");
   if (!btn) return;
   const row = btn.closest(".navcust-row");
-  const names = navOrder([...new Set(MANIFEST.items.map(navTopOf))]);
+  const names = navOrder(navFolderTops());
   const i = names.indexOf(row.dataset.n);
   const j = i + +btn.dataset.mv;
   if (j < 0 || j >= names.length) return;
