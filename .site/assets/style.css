@@ -231,6 +231,29 @@ a.fm-name:hover { color: var(--accent); }
 .fm-op.danger:hover { border-color: #c0392b; color: #c0392b; }
 .badge.dl { background: #e67e2222; color: #e67e22; font-weight: 600; }
 
+/* 文件管理器：Windows 资源管理器式交互（多选/右键菜单/拖拽/框选） */
+#fmList { position: relative; user-select: none; }
+.fm-row[data-type="dir"] .fm-name { font-weight: 600; cursor: pointer; }
+.fm-row.sel { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.fm-row.sel:hover { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+.fm-row.dragging { opacity: .45; }
+.fm-row.drop-hover { outline: 2px dashed var(--accent); outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent); }
+#fmList.drop-hover { outline: 2px dashed var(--accent); outline-offset: -6px; }
+#fmRubber { position: absolute; z-index: 5; border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent); pointer-events: none; }
+#fmCrumb a { cursor: pointer; }
+#fmCrumb a.drop-hover { outline: 2px dashed var(--accent); outline-offset: 2px; border-radius: 6px; }
+#ctxMenu { position: fixed; z-index: 200; min-width: 180px; background: var(--card); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 28px rgba(0,0,0,.18); padding: 5px; }
+.ctx-i { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%;
+  border: 0; background: none; color: var(--ink); font-family: inherit; font-size: 13.5px; text-align: left;
+  padding: 7px 11px; border-radius: 8px; cursor: pointer; }
+.ctx-i:hover { background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.ctx-i.danger { color: #c0392b; }
+.ctx-i .ctx-hint { font-size: 11px; color: var(--ink2); }
+.ctx-sep { height: 1px; background: var(--line); margin: 4px 6px; }
+
 /* 上传 */
 .dropzone { border: 2px dashed var(--line); border-radius: 12px; padding: 34px 16px; text-align: center;
   color: var(--ink2); cursor: pointer; transition: border-color .15s, background .15s; }

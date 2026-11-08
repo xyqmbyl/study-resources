@@ -898,6 +898,7 @@ function fmList() {
 
 function renderFm() {
   const { dirs, files } = fmList();
+  fmSel.clear(); fmSelAnchor = null;
   const parts = [fmState.subject, ...fmState.folder.split("/")].filter(Boolean);
   let acc = "";
   $("#fmCrumb").innerHTML =
@@ -910,6 +911,7 @@ function renderFm() {
     $("#fmSubject").value = fmState.subject;
     renderFm();
   }));
+  const base = [fmState.subject, fmState.folder].filter(Boolean).join("/");
   const ops = (it) => CAN_WRITE
     ? `<span class="fm-ops">
         <button class="fm-op" data-act="mv" data-id="${it.id}">移动/改名</button>
@@ -917,38 +919,373 @@ function renderFm() {
         <button class="fm-op danger" data-act="rm" data-id="${it.id}">删除</button>
       </span>` : "";
   $("#fmList").innerHTML =
-    dirs.map((d) => `<div class="fm-row"><span class="fm-ico">📁</span><a class="fm-name" data-dir="${esc(d)}">${esc(d)}</a><span class="fm-meta">文件夹</span></div>`).join("") +
+    dirs.map((d) => {
+      const p = base ? `${base}/${d}` : d;
+      return `<div class="fm-row" draggable="true" data-type="dir" data-dir="${esc(d)}" data-key="d:${esc(p)}"><span class="fm-ico">📁</span><span class="fm-name" title="${esc(p)}">${esc(d)}</span><span class="fm-meta">文件夹</span></div>`;
+    }).join("") +
     files.map((it) => {
       const dl = it.urls?.dl && !it.urls?.raw;
-      return `<div class="fm-row"><span class="fm-ico">📄</span>
+      return `<div class="fm-row" draggable="true" data-type="file" data-id="${it.id}" data-key="f:${esc(it.path)}"><span class="fm-ico">📄</span>
         <span class="fm-name" title="${esc(it.path)}">${esc(it.name)}.${esc(it.ext)}</span>
         <span class="fm-meta">${dl ? `<span class="badge dl">Release ${fmtSize(it.size || 0)}</span>` : fmtSize(it.size || 0)}</span>
         ${ops(it)}</div>`;
     }).join("") || `<div class="empty" style="padding:30px 0">（空目录）</div>`;
+  paintSel();
 }
 
-$("#fmList").addEventListener("click", async (e) => {
-  const dir = e.target.dataset.dir;
-  if (dir !== undefined && dir !== null) {
-    if (!fmState.subject) { fmState.subject = dir; $("#fmSubject").value = dir; }
-    else fmState.folder = fmState.folder ? fmState.folder + "/" + dir : dir;
-    return renderFm();
+/* --- 多选（Windows 资源管理器语义：单击选中、Ctrl 加减选、Shift 范围、Ctrl+A 全选、Esc 清空） --- */
+const fmSel = new Set(); // 行标识："d:目录全路径" / "f:文件path"
+let fmSelAnchor = null;
+
+function paintSel() {
+  $("#fmList").querySelectorAll(".fm-row").forEach((r) => r.classList.toggle("sel", fmSel.has(r.dataset.key)));
+}
+
+// 选区 → 操作项：文件返回 manifest 条目，文件夹展开为 {__dir: 路径}
+function fmSelItems() {
+  const out = [];
+  for (const r of $("#fmList").querySelectorAll(".fm-row.sel")) {
+    if (r.dataset.type === "dir") out.push({ __dir: r.dataset.key.slice(2) });
+    else {
+      const it = MANIFEST.items.find((x) => x.id === r.dataset.id);
+      if (it) out.push(it);
+    }
   }
+  return out;
+}
+
+$("#fmList").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-act]");
-  if (!btn) return;
-  const it = MANIFEST.items.find((x) => x.id === btn.dataset.id);
-  if (!it) return;
-  if (btn.dataset.act === "rm") fmRemove(it);
-  else if (btn.dataset.act === "mv") fmMoveDialog(it);
-  else if (btn.dataset.act === "rep") fmReplace(it);
+  if (btn) {
+    const it = MANIFEST.items.find((x) => x.id === btn.dataset.id);
+    if (it) {
+      if (btn.dataset.act === "rm") fmRemove(it);
+      else if (btn.dataset.act === "mv") fmMoveDialog(it);
+      else if (btn.dataset.act === "rep") fmReplace(it);
+    }
+    return;
+  }
+  if (Date.now() - fmRubberEnd < 400) return; // 框选结束的那次 click 不当普通点击
+  const row = e.target.closest(".fm-row");
+  if (!row) { fmSel.clear(); fmSelAnchor = null; paintSel(); return; }
+  const key = row.dataset.key;
+  if (e.shiftKey && fmSelAnchor) {
+    const rows = [...$("#fmList").querySelectorAll(".fm-row")];
+    const i1 = rows.findIndex((r) => r.dataset.key === fmSelAnchor), i2 = rows.indexOf(row);
+    if (i1 >= 0 && i2 >= 0) {
+      if (!e.ctrlKey && !e.metaKey) fmSel.clear();
+      for (let i = Math.min(i1, i2); i <= Math.max(i1, i2); i++) fmSel.add(rows[i].dataset.key);
+    }
+  } else if (e.ctrlKey || e.metaKey) {
+    if (fmSel.has(key)) fmSel.delete(key); else fmSel.add(key);
+    fmSelAnchor = key;
+  } else {
+    fmSel.clear(); fmSel.add(key); fmSelAnchor = key;
+  }
+  paintSel();
 });
 
-$("#fmNewFolder").onclick = async () => {
-  const name = prompt("新文件夹名称（将在当前目录下创建）：");
+// 双击：进入文件夹 / 打开文件（Windows 语义）
+$("#fmList").addEventListener("dblclick", (e) => {
+  if (e.target.closest("[data-act]")) return;
+  const row = e.target.closest(".fm-row");
+  if (!row) return;
+  if (row.dataset.type === "dir") return fmEnterDir(row.dataset.dir);
+  const it = MANIFEST.items.find((x) => x.id === row.dataset.id);
+  if (it) {
+    const u = it.urls || {};
+    const url = u.jsd || u.jsd2 || u.raw || u.dl;
+    if (url) window.open(url, "_blank");
+  }
+});
+
+function fmEnterDir(d) {
+  if (!fmState.subject) { fmState.subject = d; $("#fmSubject").value = d; }
+  else fmState.folder = fmState.folder ? fmState.folder + "/" + d : d;
+  renderFm();
+}
+
+/* --- 键盘快捷键（仅文件管理 tab 生效，输入框聚焦时不拦截） --- */
+window.addEventListener("keydown", (e) => {
+  if ($("#tab-fm").hidden) return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+  if (!$("#moveModal").hidden || !$("#previewModal").hidden) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+    e.preventDefault();
+    for (const r of $("#fmList").querySelectorAll(".fm-row")) fmSel.add(r.dataset.key);
+    paintSel();
+  } else if (e.key === "Escape") {
+    fmSel.clear(); fmSelAnchor = null; paintSel(); hideCtx();
+  } else if (e.key === "Delete" && CAN_WRITE) {
+    const items = fmSelItems();
+    if (items.length) fmDeleteItems(items);
+  } else if (e.key === "F2" && CAN_WRITE) {
+    const items = fmSelItems();
+    if (items.length === 1 && !items[0].__dir) fmMoveDialog(items[0]);
+  }
+});
+
+/* --- 橡皮筋框选（空白处按下拖出选框，与行矩形求交；仅鼠标） --- */
+let fmRubberEnd = 0;
+$("#fmList").addEventListener("pointerdown", (e) => {
+  if (e.button !== 0 || e.pointerType !== "mouse") return;
+  if (e.target.closest(".fm-row")) return;
+  const list = $("#fmList");
+  const listRect = list.getBoundingClientRect();
+  const sx = e.clientX, sy = e.clientY;
+  const baseSel = new Set(fmSel);
+  let box = null;
+  const onMove = (ev) => {
+    if (!box) {
+      if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+      box = document.createElement("div");
+      box.id = "fmRubber";
+      list.appendChild(box);
+    }
+    const x1 = Math.min(sx, ev.clientX), y1 = Math.min(sy, ev.clientY);
+    const x2 = Math.max(sx, ev.clientX), y2 = Math.max(sy, ev.clientY);
+    Object.assign(box.style, {
+      left: x1 - listRect.left + list.scrollLeft + "px",
+      top: y1 - listRect.top + list.scrollTop + "px",
+      width: x2 - x1 + "px", height: y2 - y1 + "px",
+    });
+    if (!ev.ctrlKey) { fmSel.clear(); for (const k of baseSel) fmSel.add(k); }
+    for (const r of list.querySelectorAll(".fm-row")) {
+      const b = r.getBoundingClientRect();
+      if (b.right > x1 && b.left < x2 && b.bottom > y1 && b.top < y2) fmSel.add(r.dataset.key);
+      else if (!ev.ctrlKey && !baseSel.has(r.dataset.key)) fmSel.delete(r.dataset.key);
+    }
+    paintSel();
+  };
+  const onUp = () => {
+    window.removeEventListener("pointermove", onMove);
+    if (box) { box.remove(); fmRubberEnd = Date.now(); }
+  };
+  window.addEventListener("pointermove", onMove);
+  window.addEventListener("pointerup", onUp, { once: true });
+});
+
+/* --- 右键菜单 --- */
+const ctxMenu = document.createElement("div");
+ctxMenu.id = "ctxMenu";
+ctxMenu.hidden = true;
+document.body.appendChild(ctxMenu);
+let ctxItems = [];
+const hideCtx = () => { ctxMenu.hidden = true; };
+
+function showCtx(items, x, y) {
+  ctxItems = items;
+  ctxMenu.innerHTML = items.map((it, i) =>
+    it === "-" ? `<div class="ctx-sep"></div>` :
+    `<button class="ctx-i${it.danger ? " danger" : ""}" data-ci="${i}">${esc(it.label)}${it.hint ? `<span class="ctx-hint">${esc(it.hint)}</span>` : ""}</button>`
+  ).join("");
+  ctxMenu.hidden = false;
+  const r = ctxMenu.getBoundingClientRect();
+  ctxMenu.style.left = Math.max(4, Math.min(x, innerWidth - r.width - 6)) + "px";
+  ctxMenu.style.top = Math.min(y, innerHeight - r.height - 6) + "px";
+}
+ctxMenu.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-ci]");
+  if (!b) return;
+  const fn = ctxItems[+b.dataset.ci]?.fn;
+  hideCtx();
+  fn && fn();
+});
+document.addEventListener("click", hideCtx);
+window.addEventListener("blur", hideCtx);
+window.addEventListener("resize", hideCtx);
+window.addEventListener("scroll", hideCtx, true);
+document.addEventListener("contextmenu", (e) => { if (!e.target.closest("#fmList")) hideCtx(); });
+
+$("#fmList").addEventListener("contextmenu", (e) => {
+  if (!CAN_WRITE) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const row = e.target.closest(".fm-row");
+  const items = [];
+  if (row) {
+    const multi = fmSel.size > 1 && fmSel.has(row.dataset.key);
+    if (!multi) { fmSel.clear(); fmSel.add(row.dataset.key); fmSelAnchor = row.dataset.key; paintSel(); }
+    if (multi) {
+      const sel = fmSelItems();
+      items.push(
+        { label: `移动 ${sel.length} 项…`, fn: () => fmBatchMoveDialog(sel) },
+        { label: `删除 ${sel.length} 项`, hint: "Del", danger: true, fn: () => fmDeleteItems(sel) },
+      );
+    } else if (row.dataset.type === "dir") {
+      const p = row.dataset.key.slice(2);
+      items.push(
+        { label: "进入", fn: () => fmEnterDir(row.dataset.dir) },
+        { label: "在此文件夹内新建文件夹", fn: () => fmNewFolderAt(p) },
+        "-",
+        { label: "移动到…", fn: () => fmBatchMoveDialog([{ __dir: p }]) },
+        "-",
+        { label: `删除文件夹（含全部内容）`, danger: true, fn: () => fmDeleteItems([{ __dir: p }]) },
+      );
+    } else {
+      const it = MANIFEST.items.find((x) => x.id === row.dataset.id);
+      if (!it) return;
+      if (!isDl(it)) items.push({ label: "打开 / 预览", fn: () => { const u = it.urls || {}; const url = u.jsd || u.jsd2 || u.raw || u.dl; url && window.open(url, "_blank"); } });
+      items.push({ label: "移动 / 改名", hint: "F2", fn: () => fmMoveDialog(it) });
+      if (!isDl(it)) items.push({ label: "替换…", fn: () => fmReplace(it) });
+      items.push("-", { label: "删除", hint: "Del", danger: true, fn: () => fmDeleteItems([it]) });
+    }
+  } else {
+    items.push(
+      { label: "新建文件夹", fn: () => fmNewFolderAt([fmState.subject, fmState.folder].filter(Boolean).join("/")) },
+      { label: "上传文件到当前目录…", fn: () => fmUpInput.click() },
+      "-",
+      { label: "全选", hint: "Ctrl+A", fn: () => { for (const r of $("#fmList").querySelectorAll(".fm-row")) fmSel.add(r.dataset.key); paintSel(); } },
+      { label: "刷新", hint: "F5 也行", fn: () => renderFm() },
+    );
+  }
+  if (items.length) showCtx(items, e.clientX, e.clientY);
+});
+
+// 右键菜单专用的多文件上传入口（选择后直接提交到当前目录，单 commit）
+const fmUpFile = document.createElement("input");
+fmUpFile.type = "file";
+fmUpFile.multiple = true;
+fmUpFile.hidden = true;
+document.body.appendChild(fmUpFile);
+fmUpFile.onchange = () => { fmUploadFiles([...fmUpFile.files]); fmUpFile.value = ""; };
+
+/* --- 拖拽移动（HTML5 DnD）：行拖到文件夹/面包屑 = 批量移动；OS 外部文件拖入 = 上传 --- */
+const clearDropHover = () => document.querySelectorAll(".drop-hover").forEach((x) => x.classList.remove("drop-hover"));
+
+$("#fmList").addEventListener("dragstart", (e) => {
+  const row = e.target.closest(".fm-row");
+  if (!row || !CAN_WRITE) { e.preventDefault(); return; }
+  if (!fmSel.has(row.dataset.key)) { fmSel.clear(); fmSel.add(row.dataset.key); fmSelAnchor = row.dataset.key; paintSel(); }
+  e.dataTransfer.setData("application/x-fm", "1");
+  e.dataTransfer.setData("text/plain", "fm-selection");
+  e.dataTransfer.effectAllowed = "move";
+  $("#fmList").querySelectorAll(".fm-row.sel").forEach((r) => r.classList.add("dragging"));
+});
+$("#fmList").addEventListener("dragend", () => {
+  $("#fmList").querySelectorAll(".dragging").forEach((r) => r.classList.remove("dragging"));
+  clearDropHover();
+});
+$("#fmList").addEventListener("dragover", (e) => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  clearDropHover();
+  const row = e.target.closest('.fm-row[data-type="dir"]');
+  if (row) row.classList.add("drop-hover");
+  else if (e.dataTransfer.types.includes("Files")) $("#fmList").classList.add("drop-hover");
+});
+$("#fmList").addEventListener("drop", (e) => {
+  e.preventDefault();
+  clearDropHover();
+  const row = e.target.closest('.fm-row[data-type="dir"]');
+  const dest = row ? row.dataset.key.slice(2) : fmState.subject || fmState.folder ? [fmState.subject, fmState.folder].filter(Boolean).join("/") : "";
+  if ([...e.dataTransfer.types].includes("application/x-fm")) {
+    const items = fmSelItems();
+    if (items.length) fmDoMove(items, dest);
+  } else if (e.dataTransfer.files.length) {
+    fmUploadFiles([...e.dataTransfer.files], dest);
+  }
+});
+
+// 面包屑也可作为放置目标（拖到上级目录）
+$("#fmCrumb").addEventListener("dragover", (e) => {
+  const a = e.target.closest("a[data-p]");
+  if (!a) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  clearDropHover();
+  a.classList.add("drop-hover");
+});
+$("#fmCrumb").addEventListener("dragleave", (e) => {
+  const a = e.target.closest("a[data-p]");
+  if (a) a.classList.remove("drop-hover");
+});
+$("#fmCrumb").addEventListener("drop", (e) => {
+  const a = e.target.closest("a[data-p]");
+  if (!a) return;
+  e.preventDefault();
+  clearDropHover();
+  if ([...e.dataTransfer.types].includes("application/x-fm")) {
+    const items = fmSelItems();
+    if (items.length) fmDoMove(items, a.dataset.p);
+  } else if (e.dataTransfer.files.length) {
+    fmUploadFiles([...e.dataTransfer.files], a.dataset.p);
+  }
+});
+
+// 批量移动/文件夹移动/改名：一次拉取 git tree 建 path→sha 映射，mv 不再逐文件 GET
+async function fmTreeMap() {
+  const ref = await ghApi(`/repos/${REPO}/git/ref/heads/main`);
+  const head = await ghApi(`/repos/${REPO}/git/commits/${ref.object.sha}`);
+  const t = await ghApi(`/repos/${REPO}/git/trees/${head.tree.sha}?recursive=1`);
+  const m = {};
+  for (const en of t.tree || []) if (en.type === "blob") m[en.path] = en.sha;
+  return m;
+}
+
+// 把选区移动到 dest（完整目录路径，"" = 仓库根目录）；rename 仅单选改名时提供
+async function fmDoMove(items, dest, rename) {
+  const dl = items.filter(isDl);
+  if (dl.length) return log(`✗ 选区含 ${dl.length} 个 Release 通道大文件，不支持批量移动（请逐个用「移动/改名」）`, "#fmLog");
+  const base = dest ? dest + "/" : "";
+  const changes = [];
+  try {
+    for (const x of items) {
+      const name = rename && !x.__dir ? rename : (x.__dir ? x.__dir.split("/").pop() : x.path.split("/").pop());
+      if (x.__dir) {
+        const pref = x.__dir + "/";
+        const toDir = (base + name).replace(/\/+$/, "");
+        if (x.__dir === toDir) continue;
+        if (toDir.startsWith(pref)) { log("✗ 不能把文件夹移动到它自己内部", "#fmLog"); return; }
+        for (const it of MANIFEST.items) {
+          if (it.type === "file" && it.path.startsWith(pref) && !it.path.endsWith("/.gitkeep"))
+            changes.push({ op: "mv", from: it.path, to: toDir + "/" + it.path.slice(pref.length) });
+        }
+      } else {
+        const to = base + name;
+        if (to !== x.path) changes.push({ op: "mv", from: x.path, to });
+      }
+    }
+  } catch (err) { log("✗ " + err.message, "#fmLog"); return; }
+  if (!changes.length) return;
+  const dup = changes.filter((c) => MANIFEST?.items?.some((x) => x.type === "file" && x.path === c.to));
+  if (dup.length && !confirm(`以下 ${dup.length} 个目标位置已有同名文件，将被覆盖：\n${dup.map((c) => c.to).join("\n")}`)) return;
+  try {
+    log(`⇄ 移动 ${changes.length} 个文件（单 commit）…`, "#fmLog");
+    const tm = await fmTreeMap();
+    for (const c of changes) c.sha = tm[c.from];
+    await commitChanges(changes, `move: ${changes.length} 个文件${dest ? " → " + dest : " → 根目录"}`);
+    log(`✔ 移动完成，索引重建约 1 分钟`, "#fmLog");
+    fmSel.clear();
+    renderFm();
+  } catch (e) { log("✗ " + e.message, "#fmLog"); }
+}
+
+// 外部文件拖入 / 右键上传：直接传到当前目录（单 commit）
+async function fmUploadFiles(files, base) {
+  if (!files.length) return;
+  if (!CAN_WRITE) return log("✗ 投稿模式请在「上传/投稿」标签操作", "#fmLog");
+  const dir = base !== undefined ? base : [fmState.subject, fmState.folder].filter(Boolean).join("/");
+  const changes = [];
+  for (const f of files) changes.push({ op: "put", path: (dir ? dir + "/" : "") + f.name, content: await fileB64(f) });
+  const conflicts = changes.filter((c) => MANIFEST?.items?.some((x) => x.path === c.path));
+  if (conflicts.length && !confirm(`以下 ${conflicts.length} 个文件已存在，将被覆盖：\n${conflicts.map((c) => c.path).join("\n")}`)) return;
+  try {
+    log(`⬆ 上传 ${changes.length} 个文件到 ${dir || "根目录"}（单 commit）…`, "#fmLog");
+    await commitChanges(changes, `upload: ${changes.length} 个文件到 ${dir || "根目录"}`);
+    log("✔ 上传成功，索引重建约 1 分钟", "#fmLog");
+    renderFm();
+  } catch (e) { log("✗ " + e.message, "#fmLog"); }
+}
+
+$("#fmNewFolder").onclick = () => fmNewFolderAt([fmState.subject, fmState.folder].filter(Boolean).join("/"));
+
+function fmNewFolderAt(base) {
+  const name = prompt(`新文件夹名称（将在 ${base || "根目录"} 下创建）：`);
   if (!name) return;
-  const base = [fmState.subject, fmState.folder].filter(Boolean).join("/");
-  await mkdir(base ? `${base}/${name}` : name);
-};
+  mkdir(base ? `${base}/${name}` : name);
+}
 
 async function mkdir(rel, sel = "#fmLog") {
   try {
@@ -958,24 +1295,48 @@ async function mkdir(rel, sel = "#fmLog") {
   } catch (e) { log("✗ " + e.message, sel); }
 }
 
-/* --- 删除 --- */
-async function fmRemove(it) {
-  const dl = it.urls?.dl && !it.urls?.raw;
-  if (!confirm(`确定删除「${it.path}」？${dl ? "（会同时删除 Release 附件）" : "此操作直接提交到仓库。"}`)) return;
+/* --- 删除（支持批量：文件/文件夹混合，git 部分单 commit，Release 附件逐个删） --- */
+// 展开选区里的文件夹：manifest 文件 + git 树里的 .gitkeep（manifest 不含占位符）
+async function fmExpandDirs(items) {
+  const dirs = items.filter((x) => x.__dir);
+  const out = items.filter((x) => !x.__dir);
+  if (!dirs.length) return items;
+  const tm = await fmTreeMap();
+  for (const d of dirs) {
+    const pref = d.__dir + "/";
+    for (const p of Object.keys(tm)) {
+      if (!p.startsWith(pref)) continue;
+      const it = MANIFEST.items.find((x) => x.type === "file" && x.path === p);
+      if (it) { if (!items.includes(it)) items.push(it); }
+      else if (p.endsWith("/.gitkeep")) items.push({ path: p, __keep: true });
+    }
+  }
+  return items;
+}
+
+async function fmDeleteItems(items) {
+  const names = items.map((x) => (x.__dir ? x.__dir + "/" : x.path)).join("、");
+  if (!confirm(`确定删除 ${items.length} 项：${names}？\n文件夹会连同其中全部文件一起删除，此操作直接提交到仓库。`)) return;
   try {
-    if (dl) {
+    const all = await fmExpandDirs([...items]);
+    const dlItems = all.filter((x) => !x.__keep && isDl(x));
+    const gitChanges = all.filter((x) => x.__keep || !isDl(x)).map((x) => ({ op: "rm", path: x.path }));
+    let map = null;
+    for (const it of dlItems) {
       const info = await releaseAssetInfo(it);
       if (info.asset) await ghApi(`/repos/${REPO}/releases/assets/${info.asset.id}`, { method: "DELETE" });
       delete info.map[it.path];
-      await saveReleaseMap(info.map, `release: 删除 ${it.path}`);
-      log("✔ Release 附件已删除，映射已更新", "#fmLog");
-    } else {
-      await commitChanges([{ op: "rm", path: it.path }], `delete: ${it.path}`);
-      log(`✔ 已删除，索引重建约 1 分钟`, "#fmLog");
+      map = info.map;
     }
+    if (map) await saveReleaseMap(map, `release: 删除 ${dlItems.length} 个附件`);
+    if (gitChanges.length) await commitChanges(gitChanges, `delete: ${gitChanges.length} 个文件`);
+    log(`✔ 已删除 ${all.length} 个文件，索引重建约 1 分钟`, "#fmLog");
+    fmSel.clear();
     renderFm();
   } catch (e) { log("✗ " + e.message, "#fmLog"); }
 }
+
+function fmRemove(it) { fmDeleteItems([it]); }
 
 /* --- 替换 --- */
 let fmRepTarget = null;
@@ -1006,11 +1367,12 @@ $("#fmFile").onchange = async (e) => {
   } catch (e) { log("✗ " + e.message, "#fmLog"); }
 };
 
-/* --- 移动 / 改名 --- */
-let mvItem = null;
+/* --- 移动 / 改名（单选可改名；多选/文件夹只选目标位置，文件名保持不变） --- */
+let mvItems = [];
 function fmMoveDialog(it) {
-  mvItem = it;
-  const dl = it.urls?.dl && !it.urls?.raw;
+  mvItems = [it];
+  const dl = isDl(it);
+  $("#mvNameRow").hidden = false;
   $("#mvFrom").textContent = it.path + (dl ? " · Release 通道大文件，改名会同步修改附件名与下载映射" : " · 可改科目/子文件夹/文件名，单 commit 完成，不限文件大小");
   $("#mvSub").value = it.folder || "";
   $("#mvName").value = it.name + (it.ext && it.ext !== "文件" ? "." + it.ext : "");
@@ -1018,30 +1380,55 @@ function fmMoveDialog(it) {
   $("#mvLog").textContent = "";
   $("#moveModal").hidden = false;
 }
+// 批量移动 / 文件夹移动：只选目标位置
+function fmBatchMoveDialog(items) {
+  const dl = items.filter((x) => !x.__dir && isDl(x));
+  const git = items.filter((x) => x.__dir || !isDl(x));
+  if (!git.length) return log("✗ 选区全是 Release 通道大文件，不支持批量移动（请逐个用「移动/改名」）", "#fmLog");
+  mvItems = git;
+  $("#mvNameRow").hidden = true;
+  $("#mvFrom").textContent = `已选 ${git.length} 项，将移动到目标位置（文件名保持不变）` +
+    (dl.length ? `；${dl.length} 个 Release 大文件已跳过` : "");
+  $("#mvSub").value = "";
+  $("#mvSubject").value = fmState.subject || Object.keys(MANIFEST.subjects)[0] || "";
+  $("#mvLog").textContent = "";
+  $("#moveModal").hidden = false;
+}
 $("#mvOk").onclick = async () => {
-  if (!mvItem) return;
+  if (!mvItems.length) return;
   const subject = $("#mvSubject").value;
   const sub = relOf($("#mvSub").value);
-  const name = $("#mvName").value.trim();
-  if (!name || name.includes("/")) return log("文件名不能为空或含 /", "#mvLog");
-  const to = `${subject}${sub ? "/" + sub : ""}/${name}`;
+  const dest = `${subject}${sub ? "/" + sub : ""}`;
   try {
-    if (isDl(mvItem)) {
-      // Release 通道：改名同步改附件名 + 更新映射
-      const info = await releaseAssetInfo(mvItem);
-      if (info.asset && name !== info.asset.name) await ghApi(`/repos/${REPO}/releases/assets/${info.asset.id}`, { method: "PATCH", body: { name } });
-      const url = `https://github.com/${REPO}/releases/download/${info.tag}/${name}`;
-      delete info.map[mvItem.path];
-      info.map[to] = typeof info.meta === "string" ? url : { ...info.meta, url };
-      await saveReleaseMap(info.map, `release: ${mvItem.path} 改名为 ${name}`);
-      log("✔ Release 附件已改名并更新映射，索引重建约 1 分钟", "#fmLog");
-    } else {
-      if (to === mvItem.path) { $("#moveModal").hidden = true; return; }
-      await commitChanges([{ op: "mv", from: mvItem.path, to }], `move: ${mvItem.path} → ${to}`);
+    if (mvItems.length === 1 && !mvItems[0].__dir) {
+      const it = mvItems[0];
+      const name = $("#mvName").value.trim();
+      if (!name || name.includes("/")) return log("文件名不能为空或含 /", "#mvLog");
+      const to = `${dest}/${name}`;
+      if (isDl(it)) {
+        // Release 通道：改名同步改附件名 + 更新映射
+        const info = await releaseAssetInfo(it);
+        if (info.asset && name !== info.asset.name) await ghApi(`/repos/${REPO}/releases/assets/${info.asset.id}`, { method: "PATCH", body: { name } });
+        const url = `https://github.com/${REPO}/releases/download/${info.tag}/${name}`;
+        delete info.map[it.path];
+        info.map[to] = typeof info.meta === "string" ? url : { ...info.meta, url };
+        await saveReleaseMap(info.map, `release: ${it.path} 改名为 ${name}`);
+        log("✔ Release 附件已改名并更新映射，索引重建约 1 分钟", "#fmLog");
+        $("#moveModal").hidden = true;
+        renderFm();
+        return;
+      }
+      if (to === it.path) { $("#moveModal").hidden = true; return; }
+      await commitChanges([{ op: "mv", from: it.path, to }], `move: ${it.path} → ${to}`);
       log(`✔ 已移动到 ${to}，索引重建约 1 分钟`, "#fmLog");
+      $("#moveModal").hidden = true;
+      fmSel.clear();
+      renderFm();
+      return;
     }
+    const n = await fmDoMove(mvItems, dest);
+    if (n === null) return; // 用户取消覆盖
     $("#moveModal").hidden = true;
-    renderFm();
   } catch (e) { log("✗ " + e.message, "#mvLog"); }
 };
 
