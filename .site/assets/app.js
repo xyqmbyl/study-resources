@@ -949,6 +949,8 @@ function renderFm() {
 /* --- 多选（Windows 资源管理器语义：单击选中、Ctrl 加减选、Shift 范围、Ctrl+A 全选、Esc 清空） --- */
 const fmSel = new Set(); // 行标识："d:目录全路径" / "f:文件path"
 let fmSelAnchor = null;
+let fmMultiMode = false; // 多选模式：单击即加选/减选，无需按住 Ctrl（触控板 Ctrl+click 易失灵的兜底）
+let fmSelDone = 0; // 鼠标已在 pointerdown 完成选中，click 里跳过（防止拖拽吞掉 click 导致选不中）
 
 function paintSel() {
   $("#fmList").querySelectorAll(".fm-row").forEach((r) => r.classList.toggle("sel", fmSel.has(r.dataset.key)));
@@ -967,6 +969,36 @@ function fmSelItems() {
   return out;
 }
 
+// Windows 语义选中：mousedown 即生效（真实资源管理器就是按下就选中，
+// 这样轻微手抖触发拖拽也不会吞掉选中）
+function fmSelApply(e, row) {
+  const key = row.dataset.key;
+  if (e.shiftKey && fmSelAnchor) {
+    const rows = [...$("#fmList").querySelectorAll(".fm-row")];
+    const i1 = rows.findIndex((r) => r.dataset.key === fmSelAnchor), i2 = rows.indexOf(row);
+    if (i1 >= 0 && i2 >= 0) {
+      if (!e.ctrlKey && !e.metaKey) fmSel.clear();
+      for (let i = Math.min(i1, i2); i <= Math.max(i1, i2); i++) fmSel.add(rows[i].dataset.key);
+    }
+  } else if (e.ctrlKey || e.metaKey || fmMultiMode) {
+    if (fmSel.has(key)) fmSel.delete(key); else fmSel.add(key);
+    fmSelAnchor = key;
+  } else {
+    fmSel.clear(); fmSel.add(key); fmSelAnchor = key;
+  }
+  paintSel();
+  fmSelDone = Date.now();
+}
+
+// 鼠标按下：先选中，再让浏览器决定是点击还是拖拽
+$("#fmList").addEventListener("pointerdown", (e) => {
+  if (e.pointerType !== "mouse") return;
+  const row = e.target.closest(".fm-row");
+  if (!row || e.target.closest("[data-act]")) return;
+  if (e.button === 2 && fmSel.has(row.dataset.key)) return; // 右键已选中项：保留整个选区
+  if (e.button === 0 || e.button === 2) fmSelApply(e, row);
+});
+
 $("#fmList").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-act]");
   if (btn) {
@@ -978,24 +1010,10 @@ $("#fmList").addEventListener("click", (e) => {
     }
     return;
   }
-  if (Date.now() - fmRubberEnd < 400) return; // 框选结束的那次 click 不当普通点击
+  if (Date.now() - fmSelDone < 500) return; // 鼠标选中已在 pointerdown 处理
   const row = e.target.closest(".fm-row");
   if (!row) { fmSel.clear(); fmSelAnchor = null; paintSel(); return; }
-  const key = row.dataset.key;
-  if (e.shiftKey && fmSelAnchor) {
-    const rows = [...$("#fmList").querySelectorAll(".fm-row")];
-    const i1 = rows.findIndex((r) => r.dataset.key === fmSelAnchor), i2 = rows.indexOf(row);
-    if (i1 >= 0 && i2 >= 0) {
-      if (!e.ctrlKey && !e.metaKey) fmSel.clear();
-      for (let i = Math.min(i1, i2); i <= Math.max(i1, i2); i++) fmSel.add(rows[i].dataset.key);
-    }
-  } else if (e.ctrlKey || e.metaKey) {
-    if (fmSel.has(key)) fmSel.delete(key); else fmSel.add(key);
-    fmSelAnchor = key;
-  } else {
-    fmSel.clear(); fmSel.add(key); fmSelAnchor = key;
-  }
-  paintSel();
+  fmSelApply(e, row); // 触摸/笔等无 pointerdown 选中路径的输入
 });
 
 // 双击：进入文件夹 / 打开文件（Windows 语义）
@@ -1039,14 +1057,16 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-/* --- 橡皮筋框选（空白处按下拖出选框，与行矩形求交；仅鼠标） --- */
+/* --- 橡皮筋框选（空白处按下拖出选框，与行矩形求交；仅鼠标；左键=替换选区，Ctrl+左键=加选，右键拖=选完弹菜单） --- */
 let fmRubberEnd = 0;
+let fmRightDrag = false; // 右键刚拖完框选：吞掉随之而来的 contextmenu，改为弹选区菜单
 $("#fmList").addEventListener("pointerdown", (e) => {
-  if (e.button !== 0 || e.pointerType !== "mouse") return;
+  if (e.pointerType !== "mouse" || (e.button !== 0 && e.button !== 2)) return;
   if (e.target.closest(".fm-row")) return;
   const list = $("#fmList");
   const listRect = list.getBoundingClientRect();
-  const sx = e.clientX, sy = e.clientY;
+  const sx = e.clientX, sy = e.clientY, btn = e.button;
+  if (btn === 0 && !e.ctrlKey) { fmSel.clear(); fmSelAnchor = null; paintSel(); } // 左键空白按下=清除（Windows 语义）
   const baseSel = new Set(fmSel);
   let box = null;
   const onMove = (ev) => {
@@ -1063,17 +1083,24 @@ $("#fmList").addEventListener("pointerdown", (e) => {
       top: y1 - listRect.top + list.scrollTop + "px",
       width: x2 - x1 + "px", height: y2 - y1 + "px",
     });
-    if (!ev.ctrlKey) { fmSel.clear(); for (const k of baseSel) fmSel.add(k); }
+    if (btn === 0 && !ev.ctrlKey) { fmSel.clear(); for (const k of baseSel) fmSel.add(k); }
     for (const r of list.querySelectorAll(".fm-row")) {
       const b = r.getBoundingClientRect();
       if (b.right > x1 && b.left < x2 && b.bottom > y1 && b.top < y2) fmSel.add(r.dataset.key);
-      else if (!ev.ctrlKey && !baseSel.has(r.dataset.key)) fmSel.delete(r.dataset.key);
+      else if (btn === 0 && !ev.ctrlKey && !baseSel.has(r.dataset.key)) fmSel.delete(r.dataset.key);
     }
     paintSel();
   };
-  const onUp = () => {
+  const onUp = (ev) => {
     window.removeEventListener("pointermove", onMove);
-    if (box) { box.remove(); fmRubberEnd = Date.now(); }
+    if (!box) return;
+    box.remove();
+    fmRubberEnd = Date.now();
+    if (btn === 2) { // 右键拖选：松手弹菜单（同 Windows 右键拖动）
+      fmRightDrag = true;
+      setTimeout(() => (fmRightDrag = false), 600);
+      if (CAN_WRITE) fmCtxShow(ev.clientX, ev.clientY);
+    }
   };
   window.addEventListener("pointermove", onMove);
   window.addEventListener("pointerup", onUp, { once: true });
@@ -1111,22 +1138,19 @@ window.addEventListener("resize", hideCtx);
 window.addEventListener("scroll", hideCtx, true);
 document.addEventListener("contextmenu", (e) => { if (!e.target.closest("#fmList")) hideCtx(); });
 
-$("#fmList").addEventListener("contextmenu", (e) => {
-  if (!CAN_WRITE) return;
-  e.preventDefault();
-  e.stopPropagation();
-  const row = e.target.closest(".fm-row");
+// 按当前选区构建并显示右键菜单：多选→批量操作；单选→单项操作；空白→目录菜单
+function fmCtxShow(x, y) {
+  const sel = fmSelItems();
   const items = [];
-  if (row) {
-    const multi = fmSel.size > 1 && fmSel.has(row.dataset.key);
-    if (!multi) { fmSel.clear(); fmSel.add(row.dataset.key); fmSelAnchor = row.dataset.key; paintSel(); }
-    if (multi) {
-      const sel = fmSelItems();
-      items.push(
-        { label: `移动 ${sel.length} 项…`, fn: () => fmBatchMoveDialog(sel) },
-        { label: `删除 ${sel.length} 项`, hint: "Del", danger: true, fn: () => fmDeleteItems(sel) },
-      );
-    } else if (row.dataset.type === "dir") {
+  if (sel.length > 1) {
+    items.push(
+      { label: `移动 ${sel.length} 项…`, fn: () => fmBatchMoveDialog(sel) },
+      { label: `删除 ${sel.length} 项`, hint: "Del", danger: true, fn: () => fmDeleteItems(sel) },
+    );
+  } else if (sel.length === 1) {
+    const want = sel[0].__dir ? `d:${sel[0].__dir}` : `f:${sel[0].path}`;
+    const row = [...$("#fmList").querySelectorAll(".fm-row")].find((r) => r.dataset.key === want);
+    if (row && row.dataset.type === "dir") {
       const p = row.dataset.key.slice(2);
       items.push(
         { label: "进入", fn: () => fmEnterDir(row.dataset.dir) },
@@ -1136,9 +1160,8 @@ $("#fmList").addEventListener("contextmenu", (e) => {
         "-",
         { label: `删除文件夹（含全部内容）`, danger: true, fn: () => fmDeleteItems([{ __dir: p }]) },
       );
-    } else {
-      const it = MANIFEST.items.find((x) => x.id === row.dataset.id);
-      if (!it) return;
+    } else if (sel[0].path) {
+      const it = sel[0];
       if (!isDl(it)) items.push({ label: "打开 / 预览", fn: () => { const u = it.urls || {}; const url = u.jsd || u.jsd2 || u.raw || u.dl; url && window.open(url, "_blank"); } });
       items.push({ label: "移动 / 改名", hint: "F2", fn: () => fmMoveDialog(it) });
       if (!isDl(it)) items.push({ label: "替换…", fn: () => fmReplace(it) });
@@ -1147,13 +1170,28 @@ $("#fmList").addEventListener("contextmenu", (e) => {
   } else {
     items.push(
       { label: "新建文件夹", fn: () => fmNewFolderAt([fmState.subject, fmState.folder].filter(Boolean).join("/")) },
-      { label: "上传文件到当前目录…", fn: () => fmUpInput.click() },
+      { label: "上传文件到当前目录…", fn: () => fmUpFile.click() },
       "-",
       { label: "全选", hint: "Ctrl+A", fn: () => { for (const r of $("#fmList").querySelectorAll(".fm-row")) fmSel.add(r.dataset.key); paintSel(); } },
       { label: "刷新", hint: "F5 也行", fn: () => renderFm() },
     );
   }
-  if (items.length) showCtx(items, e.clientX, e.clientY);
+  if (items.length) showCtx(items, x, y);
+}
+
+$("#fmList").addEventListener("contextmenu", (e) => {
+  if (!CAN_WRITE) return;
+  e.preventDefault();
+  e.stopPropagation();
+  if (fmRightDrag) return; // 右键拖选松手时已弹过菜单（onUp 里）
+  const row = e.target.closest(".fm-row");
+  if (row && !(fmSel.size > 1 && fmSel.has(row.dataset.key))) {
+    fmSel.clear();
+    fmSel.add(row.dataset.key);
+    fmSelAnchor = row.dataset.key;
+    paintSel();
+  }
+  fmCtxShow(e.clientX, e.clientY);
 });
 
 // 右键菜单专用的多文件上传入口（选择后直接提交到当前目录，单 commit）
@@ -1305,6 +1343,13 @@ async function fmUploadFiles(files, base) {
 }
 
 $("#fmNewFolder").onclick = () => fmNewFolderAt([fmState.subject, fmState.folder].filter(Boolean).join("/"));
+
+// 多选模式：开启后单击即加选/减选（等价于一直按着 Ctrl），再点一次关闭恢复正常
+$("#fmMulti").onclick = () => {
+  fmMultiMode = !fmMultiMode;
+  $("#fmMulti").classList.toggle("active", fmMultiMode);
+  $("#fmMulti").textContent = fmMultiMode ? "✅ 多选中（单击=加选/减选）" : "☑ 多选模式";
+};
 
 function fmNewFolderAt(base) {
   const name = prompt(`新文件夹名称（将在 ${base || "根目录"} 下创建）：`);
