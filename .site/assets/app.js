@@ -951,6 +951,8 @@ const fmSel = new Set(); // 行标识："d:目录全路径" / "f:文件path"
 let fmSelAnchor = null;
 let fmMultiMode = false; // 多选模式：单击即加选/减选，无需按住 Ctrl（触控板 Ctrl+click 易失灵的兜底）
 let fmSelDone = 0; // 鼠标已在 pointerdown 完成选中，click 里跳过（防止拖拽吞掉 click 导致选不中）
+let fmPendKey = null; // pointerdown 命中已选中行：暂不收起选区，等未拖动的 click 再收起/反选（这样拖起任一选中行都是整组拖动）
+let fmPendToggle = false;
 
 function paintSel() {
   $("#fmList").querySelectorAll(".fm-row").forEach((r) => r.classList.toggle("sel", fmSel.has(r.dataset.key)));
@@ -996,6 +998,13 @@ $("#fmList").addEventListener("pointerdown", (e) => {
   const row = e.target.closest(".fm-row");
   if (!row || e.target.closest("[data-act]")) return;
   if (e.button === 2 && fmSel.has(row.dataset.key)) return; // 右键已选中项：保留整个选区
+  if (e.button === 0 && !e.shiftKey && fmSel.has(row.dataset.key)) {
+    // 已选中行：先保留整个选区（Windows 语义，支持整组拖动），未拖动的 click 再收起/反选
+    fmPendKey = row.dataset.key;
+    fmPendToggle = e.ctrlKey || e.metaKey || fmMultiMode;
+    fmSelDone = Date.now();
+    return;
+  }
   if (e.button === 0 || e.button === 2) fmSelApply(e, row);
 });
 
@@ -1007,6 +1016,16 @@ $("#fmList").addEventListener("click", (e) => {
       if (btn.dataset.act === "rm") fmRemove(it);
       else if (btn.dataset.act === "mv") fmMoveDialog(it);
       else if (btn.dataset.act === "rep") fmReplace(it);
+    }
+    return;
+  }
+  if (fmPendKey) { // pointerdown 时命中已选中行：未拖动才走到这里，收起/反选
+    const key = fmPendKey;
+    fmPendKey = null;
+    if (Date.now() - fmSelDone < 500) {
+      if (fmPendToggle) { if (fmSel.has(key)) fmSel.delete(key); }
+      else { fmSel.clear(); fmSel.add(key); fmSelAnchor = key; }
+      paintSel();
     }
     return;
   }
@@ -1208,13 +1227,24 @@ const clearDropHover = () => document.querySelectorAll(".drop-hover").forEach((x
 $("#fmList").addEventListener("dragstart", (e) => {
   const row = e.target.closest(".fm-row");
   if (!row || !CAN_WRITE) { e.preventDefault(); return; }
+  fmPendKey = null; // 拖动已选中行：保留整个选区一起拖
   if (!fmSel.has(row.dataset.key)) { fmSel.clear(); fmSel.add(row.dataset.key); fmSelAnchor = row.dataset.key; paintSel(); }
   e.dataTransfer.setData("application/x-fm", "1");
   e.dataTransfer.setData("text/plain", "fm-selection");
   e.dataTransfer.effectAllowed = "move";
   $("#fmList").querySelectorAll(".fm-row.sel").forEach((r) => r.classList.add("dragging"));
+  const n = $("#fmList").querySelectorAll(".fm-row.sel").length;
+  if (n > 1) { // 默认拖影只有按下那一行，加个数量幽灵提示整组在拖
+    const ghost = document.createElement("div");
+    ghost.textContent = `📦 移动 ${n} 项`;
+    ghost.style.cssText = "position:fixed;top:-200px;left:0;padding:5px 12px;border-radius:6px;background:var(--accent);color:#fff;font-size:13px";
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 12, 12);
+    setTimeout(() => ghost.remove(), 0);
+  }
 });
 $("#fmList").addEventListener("dragend", () => {
+  fmPendKey = null;
   $("#fmList").querySelectorAll(".dragging").forEach((r) => r.classList.remove("dragging"));
   clearDropHover();
 });
