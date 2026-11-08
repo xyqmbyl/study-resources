@@ -552,14 +552,21 @@ function fileCard(it) {
   const u = it.urls || {};
   const dl = u.dl || u.jsd || u.proxy || u.raw || "#";
   const purl = u.jsd || u.jsd2 || u.raw;
-  const read = PREVIEW_EXT.has(it.ext) && purl
-    ? `<a class="btn-read" href="javascript:void(0)" data-preview="1" data-src="${esc(purl)}" data-view="${esc(officeViewUrl(it.ext, purl))}" data-title="${esc(it.name || "")}">在线预览</a>` : "";
+  // Office 文件由微软服务器抓取源 URL 渲染：jsDelivr 源偶尔被微软拒收（An error occurred），raw 最稳；
+  // PDF 是访客浏览器直接加载 iframe，与微软无关，保留 jsDelivr 优先
+  const ourl = ["doc", "docx", "ppt", "pptx"].includes(it.ext) ? (u.raw || purl) : purl;
+  const ou = ourl ? officeUrls(it.ext, ourl) : null;
+  const read = PREVIEW_EXT.has(it.ext) && ou
+    ? `<a class="btn-read" href="javascript:void(0)" data-preview="1" data-embed="${esc(ou.embed)}" data-view="${esc(ou.view)}" data-title="${esc(it.name || "")}">在线预览</a>` : "";
   // Release 通道链接自带附件头可直接下；jsd/proxy/raw 是跨域的，download 属性无效，交给统一 blob 下载（级联线路）
   const dlCh = u.dl && !u.raw;
+  // manifest 的 name 是去扩展名的 stem，落盘必须带真实扩展名，否则浏览器会按二进制流补 .txt
+  const fname = it.ext && it.name && !it.name.toLowerCase().endsWith("." + it.ext)
+    ? `${it.name}.${it.ext}` : (it.name || "file");
   // 级联顺序：gcore（jsDelivr 备用域，cdn 被限流/污染时通常可达且快）→ ghfast 代理 → ghproxy.net 代理 → raw
   const alts = JSON.stringify([u.jsd2, u.proxy, u.proxy2, u.raw].filter(Boolean));
-  const dlAttrs = dlCh ? `target="_blank" rel="noopener"` : `download data-dl="1" data-name="${esc(it.name || "file")}" data-alts='${esc(alts)}'`;
-  const altAttrs = dlCh ? `download` : `download data-dl="1" data-name="${esc(it.name || "file")}" data-alts='${esc(alts)}'`;
+  const dlAttrs = dlCh ? `target="_blank" rel="noopener"` : `download data-dl="1" data-name="${esc(fname)}" data-alts='${esc(alts)}'`;
+  const altAttrs = dlCh ? `download` : `download data-dl="1" data-name="${esc(fname)}" data-alts='${esc(alts)}'`;
   return `<div class="card">
     <div class="card-top">
       <span class="ftag ${extColor(it.ext)}">${esc((it.ext || "?").toUpperCase().slice(0, 4))}</span>
@@ -619,16 +626,21 @@ window.closeModal = () => {
 $("#videoModal").onclick = (e) => { if (e.target.id === "videoModal") closeModal(); };
 
 /* ---------- 文档在线预览 ---------- */
-// Office 文件的新窗口查看地址（微软服务器端抓取文件渲染，访客浏览器只需加载微软页面）
-function officeViewUrl(ext, url) {
-  return ["doc", "docx", "ppt", "pptx"].includes(ext)
-    ? `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`
-    : url; // PDF 直接由浏览器原生渲染
+// Word/PPT 由微软 Office Web Viewer 渲染：embed 供弹层 iframe 内嵌，view 供「新窗口打开」；
+// 微软服务器端抓取文件公开 URL，访客浏览器无需直接访问仓库，所有人可用。PDF 由浏览器原生渲染。
+function officeUrls(ext, url) {
+  if (["doc", "docx", "ppt", "pptx"].includes(ext)) {
+    return {
+      embed: `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`,
+      view: `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`,
+    };
+  }
+  return { embed: url, view: url }; // PDF
 }
-window.openPreview = (src, view, title) => {
+window.openPreview = (embed, view, title) => {
   $("#previewTitle").textContent = title || "文档预览";
-  $("#previewOpen").href = view || src;
-  $("#previewFrame").src = src;
+  $("#previewOpen").href = view || embed;
+  $("#previewFrame").src = embed;
   $("#previewModal").hidden = false;
   document.body.style.overflow = "hidden";
 };
@@ -641,7 +653,7 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("[data-preview]");
   if (!a) return;
   e.preventDefault();
-  openPreview(a.dataset.src, a.dataset.view, a.dataset.title);
+  openPreview(a.dataset.embed, a.dataset.view, a.dataset.title);
 });
 
 /* ---------- 路由 ---------- */
