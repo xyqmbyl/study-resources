@@ -218,12 +218,10 @@ function renderSidebar() {
   walk(TREE, "", 0);
   $("#sidebar").innerHTML =
     `<div class="subj-item ${state.folder === "" ? "active" : ""}" data-p=""><span>🏷️ 全部</span><span class="cnt">${MANIFEST.items.length}</span></div>` +
-    rows.join("") +
-    `<div class="nav-tools"><button id="navCustomBtn" class="fm-op" style="margin-top:8px">⚙️ 自定义导航</button></div>`;
+    rows.join("");
 }
 
 $("#sidebar").addEventListener("click", (e) => {
-  if (e.target.closest("#navCustomBtn")) { openNavModal(); return; }
   const row = e.target.closest("[data-p]");
   if (!row) return;
   const p = row.dataset.p;
@@ -253,26 +251,58 @@ function openNavModal() {
       const off = NAVCUST.hidden.includes(n);
       return `<div class="navcust-row ${off ? "off" : ""}" data-n="${esc(n)}">
         <label><input type="checkbox" data-chk="${esc(n)}" ${off ? "" : "checked"}> ${esc((meta && meta.icon) || "📁")} ${esc(n)}</label>
-        <span class="navcust-ops">
-          <button class="fm-op" data-mv="-1" title="上移">↑</button>
-          <button class="fm-op" data-mv="1" title="下移">↓</button>
-        </span></div>`;
+        <span class="drag-handle" title="拖动排序">⠿</span></div>`;
     }).join("");
   document.getElementById("navModal").hidden = false;
 }
-$("#navCustList").addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-mv]");
-  if (!btn) return;
-  const row = btn.closest(".navcust-row");
-  const names = navOrder(navFolderTops());
-  const i = names.indexOf(row.dataset.n);
-  const j = i + +btn.dataset.mv;
-  if (j < 0 || j >= names.length) return;
-  const swapped = names.slice();
-  [swapped[i], swapped[j]] = [swapped[j], swapped[i]];
-  navCust().order = swapped; // 把完整显示顺序写入自定义，后续只动相对位置
-  saveNavCust(); TREE = null; renderSidebar(); render(); openNavModal();
-});
+$("#navCustomBtn").addEventListener("click", openNavModal);
+// 拖拽磁吸排序：按住 ⠿ 上下拖，经过相邻行时整行让位（带过渡动画），松手落位
+(() => {
+  const list = document.getElementById("navCustList");
+  let row = null, startY = 0, h = 0, target = 0;
+  const rows = () => [...list.children];
+  list.addEventListener("pointerdown", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    if (!handle) return;
+    e.preventDefault();
+    row = e.target.closest(".navcust-row");
+    startY = e.clientY;
+    h = row.offsetHeight;
+    target = rows().indexOf(row);
+    row.classList.add("dragging");
+    row.setPointerCapture(e.pointerId);
+  });
+  list.addEventListener("pointermove", (e) => {
+    if (!row) return;
+    const dy = e.clientY - startY;
+    row.style.transform = `translateY(${dy}px)`;
+    target = Math.max(0, Math.min(rows().length - 1, Math.round(dy / h) + rows().indexOf(row)));
+    rows().forEach((r, i) => {
+      if (r === row) return;
+      const from = rows().indexOf(row);
+      const off = (from < target && i > from && i <= target) || (target < from && i >= target && i < from) ? -h : 0;
+      r.style.transform = off ? `translateY(${off}px)` : "";
+    });
+  });
+  const end = () => {
+    if (!row) return;
+    const moved = row;
+    const t = target;
+    row = null;
+    moved.classList.remove("dragging");
+    rows().forEach((r) => (r.style.transform = ""));
+    if (t !== rows().indexOf(moved)) {
+      const seq = rows();
+      seq.splice(seq.indexOf(moved), 1);
+      seq.splice(t, 0, moved);
+      seq.forEach((r) => list.appendChild(r));
+      navCust().order = seq.map((r) => r.dataset.n); // 完整显示顺序入库
+      saveNavCust(); TREE = null; renderSidebar(); render();
+    }
+  };
+  list.addEventListener("pointerup", end);
+  list.addEventListener("pointercancel", end);
+})();
 $("#navCustList").addEventListener("change", (e) => {
   const chk = e.target.closest("[data-chk]");
   if (!chk) return;
