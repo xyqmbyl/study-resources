@@ -16,7 +16,8 @@ BRANCH = "main"
 JSDELIVR_MAX = 20 * 1024 * 1024  # jsDelivr 单文件上限 20MB
 CN_TZ = timezone(timedelta(hours=8))
 
-SKIP_DIRS = {".git", ".github", ".site", ".scripts", ".v2c"}
+SKIP_DIRS = {".git", ".github", ".site", ".scripts", ".v2c", ".zcode",
+             "_PDF处理", ".dsh-vision-router", ".dsh", "node_modules", "__pycache__"}
 SUBJECT_META = {  # 拼音首字母（检索用）与图标
     "C语言": ("cy", "🇨"), "JAVA": ("java", "☕"), "c++": ("cpp", "➕"),
     "web程序设计": ("web", "🌐"), "中南ppt模版": ("ppt", "📊"),
@@ -28,6 +29,20 @@ SUBJECT_META = {  # 拼音首字母（检索用）与图标
     "软件工程(计科)": ("rjgc", "🏗️"), "高数": ("gs", "∑"),
     "大学生心理健康安全教育mooc期末考试答案（zxp版）.pdf": ("mooc", "🧠"),
 }
+
+# 科目名归一化：_data/*.json 与 Release 映射里的 subject 若写法不同，统一并到对应目录科目，
+# 避免侧栏出现「JAVA/Java」「计算机网络(计科)/计算机网络」这类重复科目
+SUBJECT_ALIASES = {
+    "Java": "JAVA",
+    "C++": "c++",
+    "C": "C语言",
+    "计算机网络": "计算机网络(计科)",
+    "软件工程": "软件工程(计科)",
+    "大学物理": "其他",
+}
+
+def canon_subject(name: str) -> str:
+    return SUBJECT_ALIASES.get(name, name)
 
 def stable_id(rel: str) -> str:
     return hashlib.sha1(rel.encode("utf-8")).hexdigest()[:10]
@@ -121,7 +136,8 @@ def main():
             item.setdefault("type", "book" if name == "books.json" else "link")
             item.setdefault("id", stable_id(item.get("url", item.get("title", ""))))
             files.append(item)
-            sub = item.get("subject", "其他")
+            sub = canon_subject(item.get("subject", "其他"))
+            item["subject"] = sub
             if sub not in subjects:
                 subjects[sub] = {"py": "", "icon": "🎬" if item["type"] == "link" else "📚", "count": 0}
             subjects[sub]["count"] += 1
@@ -138,7 +154,7 @@ def main():
         size = meta.get("size", 0) if isinstance(meta, dict) else 0
         pp = PurePosixPath(rel)
         parts = pp.parts
-        subject = parts[0] if len(parts) > 1 else "其他"
+        subject = canon_subject(parts[0] if len(parts) > 1 else "其他")
         files.append({
             "type": "file", "id": stable_id(rel), "subject": subject,
             "folder": "/".join(parts[1:-1]),

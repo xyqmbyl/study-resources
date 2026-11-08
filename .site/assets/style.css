@@ -276,3 +276,16 @@ a.fm-name:hover { color: var(--accent); }
   .fm-name { flex-basis: 100%; order: 2; }
   .fm-ops { margin-left: auto; }
 }
+
+/* 移动端顶栏：单行不换行，窄屏只留图标避免溢出 */
+.brand { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-right { flex: none; }
+.gh-link, .icon-btn { white-space: nowrap; }
+@media (max-width: 640px) {
+  .topbar { padding: 9px 12px; }
+  .topbar-right { gap: 6px; }
+  .brand { font-size: 14.5px; }
+  .icon-btn { padding: 5px 7px; }
+  .gh-link { padding: 5px 8px; font-size: 12.5px; }
+  #navCustomBtn .nav-label { display: none; } /* 窄屏只留 ☰ 图标，完整文案在 title 里 */
+}

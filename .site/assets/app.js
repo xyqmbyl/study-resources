@@ -398,7 +398,14 @@ function smartSearch(q) {
     const s = (it._s || "").toLowerCase();
     return alts.every((pair) => pair.some((gs) => gs.every((g) => s.includes(g))));
   });
-  return hit.length ? hit : FUSE.search(q).map((r) => r.item);
+  if (!hit.length) return FUSE.search(q).map((r) => r.item);
+  // 相关性排序：文件名含完整查询 > 文件名含全部词元 > 仅科目/拼音等元数据命中；同分保持原有时间倒序（sort 稳定）
+  const score = (it) => {
+    const n = (it.name || "").toLowerCase();
+    if (toks.every((t) => n.includes(t))) return n.includes(q) ? 3 : 2;
+    return 1;
+  };
+  return hit.sort((a, b) => score(b) - score(a));
 }
 
 function render() {
