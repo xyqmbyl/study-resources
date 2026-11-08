@@ -560,7 +560,11 @@ function renderFm() {
 
 $("#fmList").addEventListener("click", async (e) => {
   const dir = e.target.dataset.dir;
-  if (dir !== undefined && dir !== null) { fmState.folder = fmState.folder ? fmState.folder + "/" + dir : dir; return renderFm(); }
+  if (dir !== undefined && dir !== null) {
+    if (!fmState.subject) { fmState.subject = dir; $("#fmSubject").value = dir; }
+    else fmState.folder = fmState.folder ? fmState.folder + "/" + dir : dir;
+    return renderFm();
+  }
   const btn = e.target.closest("[data-act]");
   if (!btn) return;
   const it = MANIFEST.items.find((x) => x.id === btn.dataset.id);
