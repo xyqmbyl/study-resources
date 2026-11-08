@@ -1,8 +1,15 @@
 /* ===== CSU 学习资源库 · 前端逻辑 ===== */
 const REPO = "xyqmbyl/study-resources";
 const $ = (sel) => document.querySelector(sel);
-const state = { type: "all", subject: "", q: "" };
-let MANIFEST = null, FUSE = null;
+const state = { type: "all", folder: "", q: "", open: new Set() };
+let MANIFEST = null, FUSE = null, TREE = null;
+
+// 顶级科目：文件取路径首段（兼容旧 manifest 的 subject=父文件夹名），链接/书用 subject 字段
+const topOf = (it) => (it.type === "file" && it.path ? it.path.split("/")[0] : it.subject || "其他");
+const underFolder = (it, folder) =>
+  it.type === "file" && it.path
+    ? it.path === folder || it.path.startsWith(folder + "/")
+    : !folder.includes("/") && topOf(it) === folder;
 
 const typeNames = { all: "全部", file: "文件", link: "视频课程", book: "电子书" };
 const extColor = (ext) => ({
@@ -36,7 +43,7 @@ async function loadManifest() {
     document.getElementById("results").innerHTML = `<p class="empty">索引加载失败（本地预览请先运行 scripts/build_manifest.py）</p>`;
     return;
   }
-  MANIFEST.items.forEach((it) => (it._s = [it.name, it.title, it.subject, it.note, it.author, it.py, ...(it.tags || [])].filter(Boolean).join(" ")));
+  MANIFEST.items.forEach((it) => (it._s = [it.name, it.title, it.subject, it.folder, it.note, it.author, it.py, ...(it.tags || [])].filter(Boolean).join(" ")));
   FUSE = new Fuse(MANIFEST.items, { keys: ["_s"], threshold: 0.35, ignoreLocation: true });
 
   const subNames = Object.keys(MANIFEST.subjects);
@@ -59,19 +66,70 @@ function renderChips() {
   document.querySelectorAll("#typeChips .chip").forEach((b) => (b.onclick = () => { state.type = b.dataset.t; renderChips(); render(); }));
 }
 
-/* ---------- 侧栏 ---------- */
-function renderSidebar() {
-  const subs = Object.entries(MANIFEST.subjects);
-  $("#sidebar").innerHTML =
-    `<div class="subj-item ${state.subject === "" ? "active" : ""}" data-s=""><span>🏷️ 全部</span><span class="cnt">${MANIFEST.items.length}</span></div>` +
-    subs.map(([name, m]) => `<div class="subj-item ${state.subject === name ? "active" : ""}" data-s="${esc(name)}" title="${esc(name)}"><span>${m.icon || "📁"} ${esc(name)}</span><span class="cnt">${m.count}</span></div>`).join("");
-  document.querySelectorAll("#sidebar .subj-item").forEach((el) => (el.onclick = () => { state.subject = el.dataset.s; renderSidebar(); render(); }));
+/* ---------- 侧栏：多级目录树（复刻本地文件夹层级） ---------- */
+function buildTree() {
+  const root = { ch: new Map() };
+  MANIFEST.items.forEach((it) => {
+    const segs = it.type === "file" && it.path ? it.path.split("/").slice(0, -1) : [topOf(it)];
+    let node = root;
+    for (const s of segs) {
+      if (!s) continue;
+      if (!node.ch.has(s)) node.ch.set(s, { ch: new Map(), n: 0 });
+      node = node.ch.get(s);
+      node.n = (node.n || 0) + 1;
+    }
+  });
+  return root;
 }
+
+function renderSidebar() {
+  if (!TREE) TREE = buildTree();
+  const zhSort = (a, b) => a[0].localeCompare(b[0], "zh");
+  const rows = [];
+  const walk = (node, path, depth) => {
+    for (const [name, child] of [...node.ch.entries()].sort(zhSort)) {
+      const p = path ? path + "/" + name : name;
+      const open = state.open.has(p);
+      const meta = MANIFEST.subjects[p];
+      rows.push(
+        `<div class="subj-item tree ${state.folder === p ? "active" : ""}" data-p="${esc(p)}" style="padding-left:${12 + depth * 15}px">` +
+        `<span class="tw ${child.ch.size ? "" : "leaf"} ${open ? "open" : ""}" data-tw="${esc(p)}">▶</span>` +
+        `<span>${esc((meta && meta.icon) || (child.ch.size ? "📂" : "📁"))} ${esc(name)}</span>` +
+        `<span class="cnt">${child.n}</span></div>`);
+      if (open) walk(child, p, depth + 1);
+    }
+  };
+  walk(TREE, "", 0);
+  $("#sidebar").innerHTML =
+    `<div class="subj-item ${state.folder === "" ? "active" : ""}" data-p=""><span>🏷️ 全部</span><span class="cnt">${MANIFEST.items.length}</span></div>` +
+    rows.join("");
+}
+
+$("#sidebar").addEventListener("click", (e) => {
+  const row = e.target.closest("[data-p]");
+  if (!row) return;
+  const p = row.dataset.p;
+  const tw = e.target.closest(".tw");
+  if (tw && !tw.classList.contains("leaf")) {
+    state.open.has(p) ? state.open.delete(p) : state.open.add(p);
+    renderSidebar();
+    return;
+  }
+  // 选中目录：展开其所有祖先层级
+  if (p) {
+    const segs = p.split("/");
+    for (let i = 1; i <= segs.length; i++) state.open.add(segs.slice(0, i).join("/"));
+  }
+  state.folder = p;
+  renderSidebar();
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
 
 /* ---------- 列表 ---------- */
 function render() {
   let items = MANIFEST.items;
-  if (state.subject) items = items.filter((x) => x.subject === state.subject);
+  if (state.folder) items = items.filter((x) => underFolder(x, state.folder));
   if (state.type !== "all") items = items.filter((x) => x.type === state.type);
   if (state.q) items = FUSE.search(state.q).map((r) => r.item);
   const box = document.getElementById("results");
@@ -79,16 +137,44 @@ function render() {
     box.innerHTML = `<p class="empty">${state.q ? "🔍 没找到「" + esc(state.q) + "」，换个关键词试试？" : "（空）"}</p>`;
     return;
   }
+  // 分组：选中目录时按下一级子文件夹分（本层文件排最前），否则按顶级科目
   const groups = {};
-  items.forEach((it) => (groups[it.subject || "其他"] ??= []).push(it));
+  items.forEach((it) => {
+    let g;
+    if (it.type === "file" && it.path) {
+      const dirs = it.path.split("/").slice(0, -1);
+      if (state.folder) {
+        const base = state.folder.split("/").length;
+        g = dirs.length > base ? dirs[base] : "• 本层文件";
+      } else g = dirs[0] || "其他";
+    } else g = it.subject || "其他";
+    (groups[g] ??= []).push(it);
+  });
+  const keys = Object.keys(groups);
+  if (state.folder) keys.sort((a, b) => (a === "• 本层文件" ? -1 : b === "• 本层文件" ? 1 : a.localeCompare(b, "zh")));
+  const crumb = state.folder
+    ? `<div class="crumb">📂 ` +
+      state.folder.split("/").map((s, i, a) => `<a data-c="${esc(a.slice(0, i + 1).join("/"))}">${esc(s)}</a>`).join(" <i>/</i> ") +
+      `</div>`
+    : "";
   box.innerHTML =
-    (state.q ? `<p class="search-stat">「${esc(state.q)}」命中 ${items.length} 项</p>` : "") +
-    Object.entries(groups)
-      .map(([sub, arr]) => {
-        const m = MANIFEST.subjects[sub] || {};
-        return `<h2 class="group-title">${m.icon || "📁"} ${esc(sub)} <small>${arr.length}</small></h2><div class="grid">${arr.map(cardHTML).join("")}</div>`;
-      }).join("");
+    (state.q ? `<p class="search-stat">「${esc(state.q)}」命中 ${items.length} 项</p>` : "") + crumb +
+    keys.map((sub) => {
+      const m = MANIFEST.subjects[sub] || {};
+      const isTop = !state.folder;
+      return `<h2 class="group-title">${isTop ? (m.icon || "📁") : "📁"} ${esc(sub)} <small>${groups[sub].length}</small></h2><div class="grid">${groups[sub].map(cardHTML).join("")}</div>`;
+    }).join("");
 }
+
+// 面包屑点击 → 跳到对应层级
+$("#results").addEventListener("click", (e) => {
+  const a = e.target.closest(".crumb a");
+  if (!a) return;
+  state.folder = a.dataset.c;
+  renderSidebar();
+  render();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
 
 function cardHTML(it) {
   if (it.type === "link") return videoCard(it);
@@ -106,7 +192,7 @@ function fileCard(it) {
       <span class="ftag ${extColor(it.ext)}">${esc((it.ext || "?").toUpperCase().slice(0, 4))}</span>
       <div class="card-title">${hl(it.name)}</div>
     </div>
-    <div class="card-meta"><span>${esc(it.subject)}</span><span>${fmtSize(it.size || 0)}</span><span>${esc(it.updated || "")}</span></div>
+    <div class="card-meta"><span>${esc(it.folder || it.subject)}</span><span>${fmtSize(it.size || 0)}</span><span>${esc(it.updated || "")}</span></div>
     <div class="card-actions">
       <a class="btn-dl" href="${esc(dl)}" download>⬇ 下载</a>
       ${read}

@@ -40,7 +40,10 @@ def file_entry(root: Path, f: Path, release_map: dict) -> dict | None:
         return None
     if "___" in rel or os.name == "nt" and f.name.startswith("~$"):
         return None
-    subject = f.parent.name if f.parent != root else ""
+    parts = PurePosixPath(rel).parts
+    # subject = 顶级科目文件夹；folder = 科目下的子路径（多级目录导航用）
+    subject = parts[0] if len(parts) > 1 else "其他"
+    folder = "/".join(parts[1:-1])
     urls = {}
     in_git = True
     if rel in release_map:
@@ -56,7 +59,8 @@ def file_entry(root: Path, f: Path, release_map: dict) -> dict | None:
     return {
         "type": "file",
         "id": stable_id(rel),
-        "subject": subject or "其他",
+        "subject": subject,
+        "folder": folder,
         "name": f.stem,
         "ext": f.suffix.lstrip(".").lower() or "文件",
         "size": size,
@@ -126,9 +130,11 @@ def main():
         url = meta["url"] if isinstance(meta, dict) else meta
         size = meta.get("size", 0) if isinstance(meta, dict) else 0
         pp = PurePosixPath(rel)
-        subject = pp.parent.as_posix()
+        parts = pp.parts
+        subject = parts[0] if len(parts) > 1 else "其他"
         files.append({
             "type": "file", "id": stable_id(rel), "subject": subject,
+            "folder": "/".join(parts[1:-1]),
             "name": pp.stem, "ext": pp.suffix.lstrip(".").lower(), "size": size,
             "updated": today, "ts": 0, "path": rel, "urls": {"dl": url},
         })
