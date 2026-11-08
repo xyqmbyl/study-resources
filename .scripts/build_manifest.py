@@ -107,14 +107,16 @@ def main():
     if rap.exists():
         release_map = json.loads(rap.read_text(encoding="utf-8"))
 
-    subjects, files = {}, []
+    subjects, files, all_dirs = {}, [], set()
     for d in sorted(ROOT.iterdir()):
         if not d.is_dir() or d.name in SKIP_DIRS:
             continue
         meta = SUBJECT_META.get(d.name, (d.name[:4].lower(), "📁"))
         count = 0
         for f in sorted(d.rglob("*")):
-            if f.is_file():
+            if f.is_dir():  # 目录清单（含只有 .gitkeep 的空文件夹，前端文件管理器显示用）
+                all_dirs.add(f.relative_to(ROOT).as_posix())
+            elif f.is_file():
                 e = file_entry(ROOT, f, release_map)
                 if e:
                     files.append(e)
@@ -166,10 +168,16 @@ def main():
             subjects[subject] = {"py": sm[0], "icon": sm[1], "count": 0}
         subjects[subject]["count"] += 1
 
+    # Release 通道大文件的目录在 CI 上没有本地文件，按映射补进目录清单
+    for rel in release_map:
+        for anc in PurePosixPath(rel).parents[:-1]:
+            all_dirs.add(anc.as_posix())
+
     manifest = {
         "generated": datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M"),
         "repo": REPO,
         "subjects": subjects,
+        "dirs": sorted(all_dirs),
         "items": files,
     }
     out = SITE / "manifest.json"

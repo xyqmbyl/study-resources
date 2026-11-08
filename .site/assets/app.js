@@ -900,6 +900,12 @@ function fmList() {
     if (slash === -1) files.push(it);
     else dirs.set(rest.slice(0, slash), true);
   }
+  // manifest.dirs：索引生成的目录清单，补上只有 .gitkeep 占位符的空文件夹
+  for (const d of MANIFEST.dirs || []) {
+    if (!d.startsWith(prefix)) continue;
+    const rest = d.slice(prefix.length);
+    if (rest && !rest.includes("/")) dirs.set(rest, true);
+  }
   return { dirs: [...dirs.keys()], files };
 }
 
@@ -1255,12 +1261,24 @@ async function fmDoMove(items, dest, rename) {
       }
     }
   } catch (err) { log("✗ " + err.message, "#fmLog"); return; }
+  // manifest 只含资源文件，文件夹里的 .gitkeep 占位符（含空子目录）从 git 树补齐，否则空文件夹移动后会"消失"
+  const tm = changes.length || items.some((x) => x.__dir) ? await fmTreeMap() : {};
+  for (const x of items) {
+    if (!x.__dir) continue;
+    const pref = x.__dir + "/";
+    const toDir = (base + x.__dir.split("/").pop()).replace(/\/+$/, "");
+    for (const p of Object.keys(tm)) {
+      if (!p.startsWith(pref)) continue;
+      const to = toDir + "/" + p.slice(pref.length);
+      if (to === p || changes.some((c) => c.from === p)) continue;
+      changes.push({ op: "mv", from: p, to });
+    }
+  }
   if (!changes.length) return;
   const dup = changes.filter((c) => MANIFEST?.items?.some((x) => x.type === "file" && x.path === c.to));
   if (dup.length && !confirm(`以下 ${dup.length} 个目标位置已有同名文件，将被覆盖：\n${dup.map((c) => c.to).join("\n")}`)) return;
   try {
     log(`⇄ 移动 ${changes.length} 个文件（单 commit）…`, "#fmLog");
-    const tm = await fmTreeMap();
     for (const c of changes) c.sha = tm[c.from];
     await commitChanges(changes, `move: ${changes.length} 个文件${dest ? " → " + dest : " → 根目录"}`);
     log(`✔ 移动完成，索引重建约 1 分钟`, "#fmLog");
