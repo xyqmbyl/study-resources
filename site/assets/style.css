@@ -30,7 +30,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .gh-link:hover { color: var(--accent); border-color: var(--accent); }
 
 /* Hero */
-.hero { max-width: 860px; margin: 0 auto; padding: 64px 24px 20px; text-align: center; }
+.hero { max-width: 860px; margin: 0 auto; padding: 40px 24px 12px; text-align: center; }
 .hero-kicker { color: var(--accent2); font-size: 13px; letter-spacing: 4px; }
 .hero-title { font-family: var(--serif); font-size: clamp(30px, 5.5vw, 52px); font-weight: 900; margin: 8px 0 26px; }
 .hero-title em { font-style: normal; color: var(--accent); position: relative; }
