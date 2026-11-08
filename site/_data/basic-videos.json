@@ -1,82 +1,92 @@
 [
   {
-    "subject": "高等数学",
+    "type": "link",
+    "subject": "高数",
     "title": "《高等数学》全程教学视频 2.0版【宋浩老师】",
+    "author": "宋浩老师官方",
     "url": "https://www.bilibili.com/video/BV1CAxaeHEeH",
-    "author": "宋浩老师官方",
-    "verified": true,
-    "note": "同济版高数全程，149 个分集，播放量 1.3 亿+，覆盖数一数二数三"
+    "note": "同济版高数全程，149 个分集，播放量 1.3 亿+，覆盖数一数二数三",
+    "tags": ["高数", "宋浩", "同济版", "考研"]
   },
   {
-    "subject": "线性代数",
+    "type": "link",
+    "subject": "线代",
     "title": "《线性代数》教学视频 宋浩老师（2024年更新）",
-    "url": "https://www.bilibili.com/video/BV1aW411Q7x1",
     "author": "宋浩老师官方",
-    "verified": true,
-    "note": "线代全程 59 讲，行列式/矩阵/特征值/二次型全覆盖，播放量 7700 万+"
+    "url": "https://www.bilibili.com/video/BV1aW411Q7x1",
+    "note": "线代全程 59 讲，行列式/矩阵/特征值/二次型全覆盖，播放量 7700 万+",
+    "tags": ["线代", "宋浩", "考研"]
   },
   {
-    "subject": "线性代数",
+    "type": "link",
+    "subject": "线代",
     "title": "【官方双语/合集】线性代数的本质 - 系列合集",
-    "url": "https://www.bilibili.com/video/BV1ys411472E",
     "author": "3Blue1Brown",
-    "verified": true,
-    "note": "16 集动画直观理解线性代数核心概念，官方双语，播放量 530 万+"
+    "url": "https://www.bilibili.com/video/BV1ys411472E",
+    "note": "16 集动画直观理解线性代数核心概念，官方双语，播放量 530 万+",
+    "tags": ["线代", "3Blue1Brown", "动画讲解"]
   },
   {
-    "subject": "大学英语",
+    "type": "link",
+    "subject": "英语",
     "title": "【合集】【四级听力】全网最简单粗暴能提分的四级教程！",
+    "author": "烤鸭TV",
     "url": "https://www.bilibili.com/video/BV1at4y1i7cy",
-    "author": "烤鸭TV",
-    "verified": true,
-    "note": "四级听力题型系统讲解（新闻/长对话/短文），播放量 2000 万+"
+    "note": "四级听力题型系统讲解（新闻/长对话/短文），播放量 2000 万+",
+    "tags": ["英语", "四级", "听力", "CET4"]
   },
   {
-    "subject": "大学英语",
+    "type": "link",
+    "subject": "英语",
     "title": "【B站最全CET4合集】历年大学英语四级听力真题 | 原文＆英文字幕",
-    "url": "https://www.bilibili.com/video/BV1oP411X7gX",
     "author": "幼稚园大队长丨",
-    "verified": true,
-    "note": "2015–2026 历年四级听力真题合集，附原文和英文字幕，可直接精听刷题"
+    "url": "https://www.bilibili.com/video/BV1oP411X7gX",
+    "note": "2015–2026 历年四级听力真题合集，附原文和英文字幕，可直接精听刷题",
+    "tags": ["英语", "四级", "真题", "听力"]
   },
   {
-    "subject": "大学英语",
+    "type": "link",
+    "subject": "英语",
     "title": "【合集】【六级听力】三小时带你搞定六级听力！全网最简单粗暴能提分的六级教程！",
-    "url": "https://www.bilibili.com/video/BV1cr4y1c7nZ",
     "author": "烤鸭TV",
-    "verified": true,
-    "note": "六级听力 3 小时速成教程，播放量 1500 万+"
+    "url": "https://www.bilibili.com/video/BV1cr4y1c7nZ",
+    "note": "六级听力 3 小时速成教程，播放量 1500 万+",
+    "tags": ["英语", "六级", "听力", "CET6"]
   },
   {
-    "subject": "思想道德与法治",
+    "type": "link",
+    "subject": "思修",
     "title": "思政（思想道德与法治）——考前速通 课本回顾 必看！！！",
-    "url": "https://www.bilibili.com/video/BV1xE421N7Ms",
     "author": "初坠_",
-    "verified": true,
-    "note": "思修考前速通，11 个分P按课本章节梳理，期末复习向"
+    "url": "https://www.bilibili.com/video/BV1xE421N7Ms",
+    "note": "思修考前速通，11 个分P按课本章节梳理，期末复习向",
+    "tags": ["思修", "思政", "期末复习"]
   },
   {
+    "type": "link",
     "subject": "习概",
     "title": "习概——期末必刷 速通课本重难点",
-    "url": "https://www.bilibili.com/video/BV1be411b7wq",
     "author": "初坠_",
-    "verified": true,
-    "note": "习概期末复习速通，21 个选集覆盖全书重难点"
+    "url": "https://www.bilibili.com/video/BV1be411b7wq",
+    "note": "习概期末复习速通，21 个选集覆盖全书重难点",
+    "tags": ["习概", "思政", "期末复习"]
   },
   {
-    "subject": "军事理论",
+    "type": "link",
+    "subject": "军理",
     "title": "军事理论 - 哈尔滨工程大学(精品课)",
-    "url": "https://www.bilibili.com/video/BV1b341147W3",
     "author": "造物者花",
-    "verified": true,
-    "note": "哈尔滨工程大学国家级精品课搬运，43 讲，国防概述到信息化战争全覆盖"
+    "url": "https://www.bilibili.com/video/BV1b341147W3",
+    "note": "哈尔滨工程大学国家级精品课搬运，43 讲，国防概述到信息化战争全覆盖",
+    "tags": ["军理", "军事理论", "国防"]
   },
   {
+    "type": "link",
     "subject": "大学生心理健康",
     "title": "大学生心理健康（极力推荐,建议收藏）",
-    "url": "https://www.bilibili.com/video/BV1u5411P7yS",
     "author": "天师魔鬼",
-    "verified": true,
-    "note": "吉林大学杨振斌讲授的大学生心理健康课程合集，共 67 集"
+    "url": "https://www.bilibili.com/video/BV1u5411P7yS",
+    "note": "吉林大学杨振斌讲授的大学生心理健康课程合集，共 67 集",
+    "tags": ["心理健康", "通识课", "吉大"]
   }
 ]

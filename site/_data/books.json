@@ -1,198 +1,254 @@
 [
   {
+    "type": "book",
     "subject": "C语言",
     "title": "C 语言教程 - 菜鸟教程",
-    "url": "https://www.runoob.com/cprogramming/c-tutorial.html",
     "author": "菜鸟教程",
-    "note": "免费在线 C 语言入门教程，从语法到实例，适合零基础"
+    "url": "https://www.runoob.com/cprogramming/c-tutorial.html",
+    "note": "免费在线 C 语言入门教程，从语法到实例，适合零基础",
+    "tags": ["C语言", "入门", "在线教程"]
   },
   {
+    "type": "book",
     "subject": "C语言",
     "title": "Linux C编程一站式学习",
-    "url": "https://akaedu.github.io/book/",
     "author": "宋劲杉（亚嵌教育）",
-    "note": "经典开源 C 语言教材，从入门到 Linux 系统编程，官方免费在线阅读"
+    "url": "https://akaedu.github.io/book/",
+    "note": "经典开源 C 语言教材，从入门到 Linux 系统编程，官方免费在线阅读",
+    "tags": ["C语言", "Linux", "开源教材"]
   },
   {
+    "type": "book",
     "subject": "C++",
     "title": "cppreference.com C/C++ 官方参考",
-    "url": "https://en.cppreference.com/w/",
     "author": "cppreference 社区",
-    "note": "最权威的 C/C++ 标准库与语言参考手册，免费在线，有中文镜像 zh.cppreference.com"
+    "url": "https://en.cppreference.com/w/",
+    "note": "最权威的 C/C++ 标准库与语言参考手册，免费在线，有中文镜像 zh.cppreference.com",
+    "tags": ["C++", "参考手册", "标准库"]
   },
   {
+    "type": "book",
     "subject": "C++",
     "title": "C++ 那些事（CPlusPlusThings）",
-    "url": "https://github.com/Light-City/CPlusPlusThings",
     "author": "Light-City",
-    "note": "开源 C++ 学习项目，从基础语法到进阶特性，配代码实例"
+    "url": "https://github.com/Light-City/CPlusPlusThings",
+    "note": "开源 C++ 学习项目，从基础语法到进阶特性，配代码实例",
+    "tags": ["C++", "开源", "进阶"]
   },
   {
+    "type": "book",
     "subject": "Java",
     "title": "Java 教程 - 廖雪峰的官方网站",
-    "url": "https://www.liaoxuefeng.com/wiki/1252599548343744",
     "author": "廖雪峰",
-    "note": "免费在线 Java 全套教程，从入门到 JavaEE"
+    "url": "https://www.liaoxuefeng.com/wiki/1252599548343744",
+    "note": "免费在线 Java 全套教程，从入门到 JavaEE",
+    "tags": ["Java", "入门", "在线教程"]
   },
   {
+    "type": "book",
     "subject": "Java",
     "title": "JavaGuide（Java 面试 & 后端通用知识体系）",
-    "url": "https://javaguide.cn/",
     "author": "Snailclimb",
-    "note": "GitHub 140k+ star 的开源 Java 学习与面试知识体系"
+    "url": "https://javaguide.cn/",
+    "note": "GitHub 140k+ star 的开源 Java 学习与面试知识体系",
+    "tags": ["Java", "面试", "开源"]
   },
   {
+    "type": "book",
     "subject": "Python",
     "title": "Python 教程 - 廖雪峰的官方网站",
-    "url": "https://www.liaoxuefeng.com/wiki/1016959663602400",
     "author": "廖雪峰",
-    "note": "最流行的中文 Python 入门在线教程之一，免费"
+    "url": "https://www.liaoxuefeng.com/wiki/1016959663602400",
+    "note": "最流行的中文 Python 入门在线教程之一，免费",
+    "tags": ["Python", "入门", "在线教程"]
   },
   {
+    "type": "book",
     "subject": "Python",
     "title": "Python 官方教程（中文）",
-    "url": "https://docs.python.org/zh-cn/3/tutorial/",
     "author": "Python Software Foundation",
-    "note": "Python 官方文档中文版入门教程，权威且持续更新"
+    "url": "https://docs.python.org/zh-cn/3/tutorial/",
+    "note": "Python 官方文档中文版入门教程，权威且持续更新",
+    "tags": ["Python", "官方文档", "权威"]
   },
   {
-    "subject": "数据结构与算法",
+    "type": "book",
+    "subject": "数据结构",
     "title": "hello-algo（Hello 算法）",
-    "url": "https://www.hello-algo.com/",
     "author": "krahets",
-    "note": "动画图解、一键运行的数据结构与算法教程，支持多语言代码，GitHub 100k+ star"
+    "url": "https://www.hello-algo.com/",
+    "note": "动画图解、一键运行的数据结构与算法教程，支持多语言代码，GitHub 130k+ star",
+    "tags": ["数据结构", "算法", "开源", "动画图解"]
   },
   {
-    "subject": "数据结构与算法",
+    "type": "book",
+    "subject": "数据结构",
     "title": "OI Wiki",
-    "url": "https://oi-wiki.org/",
     "author": "OI Wiki 社区",
-    "note": "算法竞赛知识整合站点，数据结构与算法讲解深入，开源免费"
+    "url": "https://oi-wiki.org/",
+    "note": "算法竞赛知识整合站点，数据结构与算法讲解深入，开源免费（CC BY-SA 4.0）",
+    "tags": ["算法", "数据结构", "竞赛", "开源"]
   },
   {
-    "subject": "操作系统/计算机网络",
+    "type": "book",
+    "subject": "其他",
     "title": "CS-Notes",
-    "url": "https://github.com/CyC2018/CS-Notes",
     "author": "CyC2018",
-    "note": "GitHub 170k+ star，涵盖算法、操作系统、计算机网络、系统设计等面试基础知识"
+    "url": "https://github.com/CyC2018/CS-Notes",
+    "note": "GitHub 186k+ star，涵盖算法、操作系统、计算机网络、系统设计等面试基础知识（CC BY-NC-SA 4.0）",
+    "tags": ["面试", "基础知识", "开源"]
   },
   {
+    "type": "book",
     "subject": "操作系统",
     "title": "Operating Systems: Three Easy Pieces（OSTEP）",
-    "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/",
     "author": "Remzi & Andrea Arpaci-Dusseau（威斯康星大学）",
-    "note": "经典操作系统教材，作者官网提供全部章节免费 PDF"
+    "url": "https://pages.cs.wisc.edu/~remzi/OSTEP/",
+    "note": "经典操作系统教材，作者官网提供全部章节免费 PDF",
+    "tags": ["操作系统", "英文教材", "免费PDF"]
   },
   {
+    "type": "book",
     "subject": "计算机网络",
     "title": "小林coding - 图解网络",
-    "url": "https://xiaolincoding.com/",
     "author": "小林coding",
-    "note": "图解计算机网络与操作系统，免费在线，作者自维护的合法站点"
+    "url": "https://xiaolincoding.com/",
+    "note": "图解计算机网络与操作系统，免费在线，作者自维护的合法站点",
+    "tags": ["计算机网络", "图解", "面试"]
   },
   {
+    "type": "book",
     "subject": "计算机网络",
     "title": "Computer Networking: Principles, Protocols and Practice",
-    "url": "https://www.computer-networking.info/",
     "author": "Olivier Bonaventure（UCLouvain）",
-    "note": "开源计算机网络英文教材，官方免费在线阅读"
+    "url": "https://www.computer-networking.info/",
+    "note": "开源计算机网络英文教材，官方免费在线阅读",
+    "tags": ["计算机网络", "开源教材", "英文"]
   },
   {
-    "subject": "计算机组成/体系结构",
+    "type": "book",
+    "subject": "计算机体系结构",
     "title": "nand2tetris（从与非门到俄罗斯方块）",
-    "url": "https://www.nand2tetris.org/",
     "author": "Noam Nisan & Simon Schocken",
-    "note": "计算机体系结构经典项目课程，官网提供全部软件、讲义与项目免费下载"
+    "url": "https://www.nand2tetris.org/",
+    "note": "计算机体系结构经典项目课程，官网提供全部软件、讲义与项目免费下载",
+    "tags": ["体系结构", "项目实战", "开源"]
   },
   {
-    "subject": "计算机自学路线",
+    "type": "book",
+    "subject": "其他",
     "title": "CS自学指南",
-    "url": "https://csdiy.wiki/",
     "author": "pkuflyingpig",
-    "note": "GitHub 开源的自学路线指南，汇集世界名校计算机公开课与讲义"
+    "url": "https://csdiy.wiki/",
+    "note": "GitHub 开源的自学路线指南，汇集世界名校计算机公开课与讲义",
+    "tags": ["自学路线", "公开课", "开源"]
   },
   {
-    "subject": "计算机自学路线",
+    "type": "book",
+    "subject": "其他",
     "title": "TeachYourselfCS-CN（计算机自学指南中文版）",
-    "url": "https://github.com/izackwu/TeachYourselfCS-CN",
     "author": "Oz Nova / Myles Byrne（中文翻译 izackwu）",
-    "note": "TeachYourselfCS 中文翻译，九门计算机核心课程自学推荐，开源免费"
+    "url": "https://github.com/izackwu/TeachYourselfCS-CN",
+    "note": "TeachYourselfCS 中文翻译，九门计算机核心课程自学推荐，开源免费",
+    "tags": ["自学路线", "核心课程", "开源"]
   },
   {
+    "type": "book",
     "subject": "软件工程",
     "title": "Software Engineering at Google（软件工程随谷歌）",
-    "url": "https://abseil.io/resources/swe-book",
     "author": "Titus Winters 等（Google / O'Reilly）",
-    "note": "谷歌官方授权免费在线阅读的软件工程图书"
+    "url": "https://abseil.io/resources/swe-book",
+    "note": "谷歌官方授权免费在线阅读的软件工程图书",
+    "tags": ["软件工程", "Google", "免费"]
   },
   {
+    "type": "book",
     "subject": "软件工程",
     "title": "System Design Primer（系统设计入门）",
-    "url": "https://github.com/donnemartin/system-design-primer",
     "author": "donnemartin",
-    "note": "GitHub 370k+ star 的系统设计与软件工程开源学习资料，含中文翻译"
+    "url": "https://github.com/donnemartin/system-design-primer",
+    "note": "GitHub 377k+ star 的系统设计与软件工程开源学习资料，含中文翻译",
+    "tags": ["系统设计", "软件工程", "开源"]
   },
   {
+    "type": "book",
     "subject": "编译原理",
     "title": "Crafting Interpreters（手写解释器）",
-    "url": "https://craftinginterpreters.com/",
     "author": "Robert Nystrom",
-    "note": "作者官网全文免费在线阅读，从零手写两种解释器学习编译原理"
+    "url": "https://craftinginterpreters.com/",
+    "note": "作者官网全文免费在线阅读，从零手写两种解释器学习编译原理",
+    "tags": ["编译原理", "解释器", "免费"]
   },
   {
-    "subject": "汇编",
+    "type": "book",
+    "subject": "汇编语言",
     "title": "PC Assembly Language",
-    "url": "http://www.drpaulcarter.com/pcasm/",
     "author": "Paul A. Carter",
-    "note": "经典免费 x86 汇编入门教材，作者官网提供 PDF 下载"
+    "url": "http://www.drpaulcarter.com/pcasm/",
+    "note": "经典免费 x86 汇编入门教材，作者官网提供 PDF 下载",
+    "tags": ["汇编", "x86", "免费PDF"]
   },
   {
-    "subject": "高等数学",
+    "type": "book",
+    "subject": "高数",
     "title": "MIT 18.01 Single Variable Calculus（MIT 单变量微积分）",
+    "author": "MIT OpenCourseWare",
     "url": "https://ocw.mit.edu/courses/18-01-single-variable-calculus-fall-2006/",
-    "author": "MIT OpenCourseWare",
-    "note": "MIT 公开课，视频、讲义、习题全套免费"
+    "note": "MIT 公开课，视频、讲义、习题全套免费",
+    "tags": ["高数", "MIT", "公开课"]
   },
   {
-    "subject": "高等数学",
+    "type": "book",
+    "subject": "高数",
     "title": "MIT 18.02SC Multivariable Calculus（MIT 多元微积分）",
-    "url": "https://ocw.mit.edu/courses/18-02sc-multivariable-calculus-fall-2010/",
     "author": "MIT OpenCourseWare",
-    "note": "MIT 多元微积分公开课，对应国内高数（下），全套免费"
+    "url": "https://ocw.mit.edu/courses/18-02sc-multivariable-calculus-fall-2010/",
+    "note": "MIT 多元微积分公开课，对应国内高数（下），全套免费",
+    "tags": ["高数", "MIT", "多元微积分"]
   },
   {
-    "subject": "高等数学",
+    "type": "book",
+    "subject": "高数",
     "title": "OpenStax Calculus Volume 1",
-    "url": "https://openstax.org/details/books/calculus-volume-1",
     "author": "OpenStax（莱斯大学）",
-    "note": "开源免费微积分教材，可在线阅读或下载 PDF"
+    "url": "https://openstax.org/details/books/calculus-volume-1",
+    "note": "开源免费微积分教材，可在线阅读或下载 PDF",
+    "tags": ["微积分", "开源教材", "免费PDF"]
   },
   {
-    "subject": "线性代数",
+    "type": "book",
+    "subject": "线代",
     "title": "3Blue1Brown 官网：Essence of Linear Algebra 专题",
-    "url": "https://www.3blue1brown.com/topics/linear-algebra",
     "author": "Grant Sanderson（3Blue1Brown）",
-    "note": "线代本质系列官网页面，动画+文字讲解，配套 B 站中文版"
+    "url": "https://www.3blue1brown.com/topics/linear-algebra",
+    "note": "线代本质系列官网页面，动画+文字讲解，配套 B 站中文版",
+    "tags": ["线代", "动画讲解", "直观理解"]
   },
   {
-    "subject": "线性代数",
+    "type": "book",
+    "subject": "线代",
     "title": "MIT 18.06 Linear Algebra（Gilbert Strang 线性代数）",
-    "url": "https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/",
     "author": "Gilbert Strang / MIT OpenCourseWare",
-    "note": "全球最经典的线性代数公开课，视频与讲义全套免费"
+    "url": "https://ocw.mit.edu/courses/18-06-linear-algebra-spring-2010/",
+    "note": "全球最经典的线性代数公开课，视频与讲义全套免费",
+    "tags": ["线代", "MIT", "Strang"]
   },
   {
-    "subject": "大学英语",
+    "type": "book",
+    "subject": "英语",
     "title": "全国大学英语四、六级考试（CET）官网",
-    "url": "https://cet.neea.edu.cn/",
     "author": "中国教育考试网（教育部教育考试院）",
-    "note": "官方考试大纲、样卷、报名与成绩查询入口"
+    "url": "https://cet.neea.edu.cn/",
+    "note": "官方考试大纲、样卷、报名与成绩查询入口",
+    "tags": ["四六级", "官方", "考试"]
   },
   {
-    "subject": "大学英语",
+    "type": "book",
+    "subject": "英语",
     "title": "Purdue OWL 写作实验室",
-    "url": "https://owl.purdue.edu/owl/purdue_owl.html",
     "author": "Purdue University",
-    "note": "普渡大学官方免费学术英语写作资源，语法、论文写作权威指南"
+    "url": "https://owl.purdue.edu/owl/purdue_owl.html",
+    "note": "普渡大学官方免费学术英语写作资源，语法、论文写作权威指南",
+    "tags": ["英语写作", "学术英语", "免费"]
   }
 ]
