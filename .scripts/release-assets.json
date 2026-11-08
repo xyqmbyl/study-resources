@@ -1,6 +1,18 @@
 {
-  "操作系统/27王道《操作系统》高清带书签.pdf": {"url": "https://github.com/xyqmbyl/study-resources/releases/download/v1.0/WangDao2027-OperatingSystem-HD.pdf", "size": 272469001},
-  "计算机网络(计科)/27王道《计算机网络》高清带书签.pdf": {"url": "https://github.com/xyqmbyl/study-resources/releases/download/v1.0/WangDao2027-ComputerNetwork-HD.pdf", "size": 197385813},
-  "软件工程(计科)/电子书_软件工程理论与实践_毛新军.pdf": {"url": "https://github.com/xyqmbyl/study-resources/releases/download/v1.0/SE-Theory-Textbook-MaoXinjun.pdf", "size": 132333685},
-  "中南ppt模版/【3】中南大学典雅文艺风PPT模板.pptx": {"url": "https://github.com/xyqmbyl/study-resources/releases/download/v1.0/CSU-PPT-Template-Elegant3.pptx", "size": 202124536}
+  "操作系统/综合资源/27王道《操作系统》高清带书签.pdf": {
+    "url": "https://github.com/xyqmbyl/study-resources/releases/download/v1.0/WangDao2027-OperatingSystem-HD.pdf",
+    "size": 272469001
+  },
+  "计算机网络(计科)/综合资源/27王道《计算机网络》高清带书签.pdf": {
+    "url": "https://github.com/xyqmbyl/study-resources/releases/download/v1.0/WangDao2027-ComputerNetwork-HD.pdf",
+    "size": 197385813
+  },
+  "软件工程(计科)/综合资源/电子书_软件工程理论与实践_毛新军.pdf": {
+    "url": "https://github.com/xyqmbyl/study-resources/releases/download/v1.0/SE-Theory-Textbook-MaoXinjun.pdf",
+    "size": 132333685
+  },
+  "中南ppt模版/综合资源/【3】中南大学典雅文艺风PPT模板.pptx": {
+    "url": "https://github.com/xyqmbyl/study-resources/releases/download/v1.0/CSU-PPT-Template-Elegant3.pptx",
+    "size": 202124536
+  }
 }
