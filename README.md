@@ -18,14 +18,14 @@
 
 GitHub 上还有几位学长收集的优质的中南资料库，与本项目**互补而非替代**，感谢他们的付出，建议搭配食用：
 
-| 仓库 | 定位 | 推荐场景 |
-|---|---|---|
+| 仓库 | 定位 |
+|---|---|
 | [FeijiangHan/CSU-CS-review-materials](https://github.com/FeijiangHan/CSU-CS-review-materials) ★270 | 按年级学期组织的**计科复习资料 + 学习方法论**，覆盖 web、人机交互、体系结构、分布式、嵌入式等 |
 | [zhiyog/CSU\_learn\_class](https://github.com/zhiyog/CSU_learn_class) | 计科核心课（C++、Java、Linux、操作系统、大物等）的**个人笔记与总结**|
 | [LIJIAXU137/CSU-SE-FinalExamination](https://github.com/LIJIAXU137/CSU-SE-FinalExamination) | **软件工程专业**期末资料（大二上/下） |
 | [Jinyong-Li/CSU-Courses](https://github.com/Jinyong-Li/CSU-Courses) | **中南大学课程共享计划**，通识课覆盖广（公选、军理、制造训练、健康心理等） |
 
-> 本库的优势是**检索体验**：在线网站按目录树浏览、全文搜索、在线预览、多线路下载；上面的仓库则提供更多科目的攻略与笔记。两边都逛逛，资料就齐了。
+
 
 ## 目录
 
