@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""扫描科目文件夹 → site/manifest.json（网站索引）。
+"""扫描科目文件夹 → .site/manifest.json（网站索引）。
 
 - 文件条目: {type:"file", id, subject, name, ext, size, updated, path, urls:{fast,raw,mirror}}
 - 大文件(在 .gitignore 中、走 Releases): url 写入 urls，来源 release-assets.json
-- 链接条目: 合并 site/_data/*.json (type: link / book)
+- 链接条目: 合并 .site/_data/*.json (type: link / book)
 """
 import json, hashlib, os, re, sys
 from pathlib import Path, PurePosixPath
 from datetime import datetime, timezone, timedelta
 
 ROOT = Path(__file__).resolve().parent.parent
-SITE = ROOT / "site"
+SITE = ROOT / ".site"
 REPO = os.environ.get("REPO", "xyqmbyl/study-resources")
 BRANCH = "main"
 JSDELIVR_MAX = 20 * 1024 * 1024  # jsDelivr 单文件上限 20MB
 CN_TZ = timezone(timedelta(hours=8))
 
-SKIP_DIRS = {".git", ".github", "site", "scripts", ".v2c"}
+SKIP_DIRS = {".git", ".github", ".site", ".scripts", ".v2c"}
 SUBJECT_META = {  # 拼音首字母（检索用）与图标
     "C语言": ("cy", "🇨"), "JAVA": ("java", "☕"), "c++": ("cpp", "➕"),
     "web程序设计": ("web", "🌐"), "中南ppt模版": ("ppt", "📊"),
@@ -81,7 +81,7 @@ def load_data(name: str) -> list:
 
 def main():
     release_map = {}
-    rap = ROOT / "scripts" / "release-assets.json"
+    rap = ROOT / ".scripts" / "release-assets.json"
     if rap.exists():
         release_map = json.loads(rap.read_text(encoding="utf-8"))
 
