@@ -256,25 +256,16 @@ function openNavModal() {
   document.getElementById("navModal").hidden = false;
 }
 $("#navCustomBtn").addEventListener("click", openNavModal);
-// 拖拽磁吸排序：按住 ⠿ 上下拖，经过相邻行时整行让位（带过渡动画），松手落位
+// 拖拽磁吸排序：按住 ⠿ 上下拖，经过相邻行时整行让位（带过渡动画），松手落位；
+// 指针接近弹窗可视区上下边缘时自动滚动，落点计算包含滚动量
 (() => {
   const list = document.getElementById("navCustList");
-  let row = null, startY = 0, h = 0, target = 0;
+  const box = document.querySelector("#navModal .modal-box"); // 实际滚动容器
+  let row = null, startY = 0, startScroll = 0, h = 0, target = 0, curY = 0, raf = 0;
   const rows = () => [...list.children];
-  list.addEventListener("pointerdown", (e) => {
-    const handle = e.target.closest(".drag-handle");
-    if (!handle) return;
-    e.preventDefault();
-    row = e.target.closest(".navcust-row");
-    startY = e.clientY;
-    h = row.offsetHeight;
-    target = rows().indexOf(row);
-    row.classList.add("dragging");
-    row.setPointerCapture(e.pointerId);
-  });
-  list.addEventListener("pointermove", (e) => {
+  const update = () => {
     if (!row) return;
-    const dy = e.clientY - startY;
+    const dy = curY - startY + (box.scrollTop - startScroll); // 滚动量计入拖拽距离
     row.style.transform = `translateY(${dy}px)`;
     target = Math.max(0, Math.min(rows().length - 1, Math.round(dy / h) + rows().indexOf(row)));
     rows().forEach((r, i) => {
@@ -286,9 +277,39 @@ $("#navCustomBtn").addEventListener("click", openNavModal);
       else if (target < from && i >= target && i < from) off = h;
       r.style.transform = off ? `translateY(${off}px)` : "";
     });
+  };
+  // 指针停在边缘附近也要持续滚动，用 rAF 循环驱动
+  const tick = () => {
+    if (!row) return;
+    const rect = box.getBoundingClientRect();
+    const edge = 44;
+    let v = 0;
+    if (curY < rect.top + edge) v = -Math.min(14, (rect.top + edge - curY) * 0.4);
+    else if (curY > rect.bottom - edge) v = Math.min(14, (curY - (rect.bottom - edge)) * 0.4);
+    if (v) { box.scrollTop += v; update(); }
+    raf = requestAnimationFrame(tick);
+  };
+  list.addEventListener("pointerdown", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    if (!handle) return;
+    e.preventDefault();
+    row = e.target.closest(".navcust-row");
+    startY = curY = e.clientY;
+    startScroll = box.scrollTop;
+    h = row.offsetHeight;
+    target = rows().indexOf(row);
+    row.classList.add("dragging");
+    row.setPointerCapture(e.pointerId);
+    raf = requestAnimationFrame(tick);
+  });
+  list.addEventListener("pointermove", (e) => {
+    if (!row) return;
+    curY = e.clientY;
+    update();
   });
   const end = () => {
     if (!row) return;
+    cancelAnimationFrame(raf);
     const moved = row;
     const t = target;
     row = null;
