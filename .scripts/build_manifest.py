@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """扫描科目文件夹 → .site/manifest.json（网站索引）。
 
-- 文件条目: {type:"file", id, subject, name, ext, size, updated, path, urls:{fast,raw,mirror}}
+- 文件条目: {type:"file", id, subject, name, ext, size, updated, path, urls:{jsd,jsd2,raw,proxy,proxy2}}
 - 大文件(在 .gitignore 中、走 Releases): url 写入 urls，来源 release-assets.json
 - 链接条目: 合并 .site/_data/*.json (type: link / book)
 """
@@ -51,12 +51,17 @@ def file_entry(root: Path, f: Path, release_map: dict) -> dict | None:
     if rel in release_map:
         meta = release_map[rel]
         urls["dl"] = meta["url"] if isinstance(meta, dict) else meta
+        # GitHub Release 附件在国内常被墙/504，加 ghproxy.net 代理作备用线路
+        urls["proxy"] = f"https://ghproxy.net/{urls['dl']}"
         in_git = False
     else:
         if size <= JSDELIVR_MAX:
             urls["jsd"] = f"https://cdn.jsdelivr.net/gh/{REPO}@{BRANCH}/{rel}"
+            # jsDelivr 官方多 CDN 域名，cdn 主域被限流/污染时通常 gcore 可达且更快
+            urls["jsd2"] = f"https://gcore.jsdelivr.net/gh/{REPO}@{BRANCH}/{rel}"
         urls["raw"] = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}/{rel}"
         urls["proxy"] = f"https://ghfast.top/https://raw.githubusercontent.com/{REPO}/{BRANCH}/{rel}"
+        urls["proxy2"] = f"https://ghproxy.net/https://raw.githubusercontent.com/{REPO}/{BRANCH}/{rel}"
     mtime = datetime.fromtimestamp(f.stat().st_mtime, CN_TZ)
     return {
         "type": "file",

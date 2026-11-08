@@ -492,9 +492,14 @@ $("#results").addEventListener("click", async (e) => {
   try { for (const x of JSON.parse(a.dataset.alts || "[]")) if (x && !candidates.includes(x)) candidates.push(x); } catch (err2) {}
   let ok = false;
   a.textContent = "连接中…";
+  // 每条线路给 20 秒首字节超时（线路被墙时常表现为长时间无响应），
+  // 响应头到达后解除超时，慢线路（如代理几百 KB/s）也能完整下完
   for (const u2 of candidates) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
     try {
-      const resp = await fetch(u2);
+      const resp = await fetch(u2, { signal: ctrl.signal });
+      clearTimeout(timer);
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       // 流式读取以显示进度；无流接口时退回整块 blob
       const total = +resp.headers.get("content-length") || 0;
@@ -514,7 +519,7 @@ $("#results").addEventListener("click", async (e) => {
       }
       ok = true;
       break;
-    } catch (err) { /* 换下一条线路 */ }
+    } catch (err) { clearTimeout(timer); /* 换下一条线路 */ }
   }
   resetPaint();
   if (!ok) window.open(candidates[0], "_blank", "noopener");
@@ -530,11 +535,12 @@ function cardHTML(it) {
 function fileCard(it) {
   const u = it.urls || {};
   const dl = u.dl || u.jsd || u.proxy || u.raw || "#";
-  const read = it.ext === "pdf" && (u.jsd || u.raw)
-    ? `<a class="btn-read" href="${esc(u.jsd || u.raw)}" target="_blank" rel="noopener">在线阅读</a>` : "";
+  const read = it.ext === "pdf" && (u.jsd || u.jsd2 || u.raw)
+    ? `<a class="btn-read" href="${esc(u.jsd || u.jsd2 || u.raw)}" target="_blank" rel="noopener">在线阅读</a>` : "";
   // Release 通道链接自带附件头可直接下；jsd/proxy/raw 是跨域的，download 属性无效，交给统一 blob 下载（级联线路）
   const dlCh = u.dl && !u.raw;
-  const alts = JSON.stringify([u.jsd, u.proxy, u.raw].filter(Boolean));
+  // 级联顺序：gcore（jsDelivr 备用域，cdn 被限流/污染时通常可达且快）→ ghfast 代理 → ghproxy.net 代理 → raw
+  const alts = JSON.stringify([u.jsd2, u.proxy, u.proxy2, u.raw].filter(Boolean));
   const dlAttrs = dlCh ? `target="_blank" rel="noopener"` : `download data-dl="1" data-name="${esc(it.name || "file")}" data-alts='${esc(alts)}'`;
   const altAttrs = dlCh ? `download` : `download data-dl="1" data-name="${esc(it.name || "file")}" data-alts='${esc(alts)}'`;
   return `<div class="card">
