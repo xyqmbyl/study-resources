@@ -12,6 +12,16 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 [hidden] { display: none !important; }
 
+/* 滚动条：引用主题变量，随亮暗自动切换 */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink2) 45%, transparent) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--ink2) 45%, transparent); border-radius: 999px;
+  border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); border-color: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+[hidden] { display: none !important; }
+
 /* 壁纸背景层：固定置底、低透明度，卡片均不透明，不影响任何排版与可读性 */
 #wallpaper { position: fixed; inset: 0; z-index: -1; background-size: cover; background-position: center;
   opacity: .18; pointer-events: none; }
