@@ -545,24 +545,39 @@ function cardHTML(it) {
   return fileCard(it);
 }
 
-// 可在线预览的文档类型：PDF 浏览器原生渲染；Word/PPT 走微软 Office Web Viewer（服务器端抓取公开 URL 渲染，对所有访客可用）
+// 可在线预览的类型：PDF/图片/文本代码由访客浏览器原生渲染（iframe 直接加载）；
+// Word/PPT 走微软 Office Web Viewer（服务器端抓取公开 URL 渲染，对所有访客可用）
 const PREVIEW_EXT = new Set(["pdf", "doc", "docx", "ppt", "pptx"]);
+// 图片 / 音视频：浏览器 iframe 原生渲染
+const IMG_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "ico", "avif", "mp4", "webm", "mp3", "wav", "ogg", "flac"]);
+// 纯文本 / 代码：iframe 按 text/plain 渲染
+const TEXT_EXT = new Set(["txt", "md", "log", "json", "csv", "tsv", "cpp", "c", "cc", "cxx", "h", "hpp", "py", "java", "js", "ts", "css", "html", "htm", "xml", "yml", "yaml", "sh", "bat", "ps1", "sql", "ini", "toml", "conf"]);
+const canPreview = (ext) => PREVIEW_EXT.has(ext) || IMG_EXT.has(ext) || TEXT_EXT.has(ext);
+// blob 预览时给 Blob 指定 MIME，否则图片/文本会被浏览器当二进制流下载而非渲染
+const MIME_BY_EXT = { pdf: "application/pdf", svg: "image/svg+xml", jpg: "image/jpeg", jpeg: "image/jpeg" };
+const previewMime = (ext) => MIME_BY_EXT[ext] || (IMG_EXT.has(ext) ? `image/${ext}` : (TEXT_EXT.has(ext) ? "text/plain" : ""));
 
 function fileCard(it) {
   const u = it.urls || {};
   const dl = u.dl || u.jsd || u.proxy || u.raw || "#";
   const purl = u.jsd || u.jsd2 || u.raw;
   // Office 文件由微软服务器抓取源 URL 渲染：jsDelivr 源偶尔被微软拒收（An error occurred），raw 最稳；
-  // PDF 是访客浏览器直接加载 iframe，与微软无关，保留 jsDelivr 优先
-  const ourl = ["doc", "docx", "ppt", "pptx"].includes(it.ext) ? (u.raw || purl) : purl;
+  // PDF 是访客浏览器直接加载 iframe：jsDelivr 国内可达优先；>20MB 无 jsd，raw 国内常被墙，
+  // 改为点击后经级联代理线路 fetch 成 blob 再渲染（data-blob），保证国内访客也能预览大 PDF
+  const isOffice = ["doc", "docx", "ppt", "pptx"].includes(it.ext);
+  // PDF 无 jsDelivr 线路（>20MB）时不给 iframe 源，强制走下方 data-blob 级联
+  const ourl = isOffice ? (u.raw || purl) : (u.jsd || u.jsd2);
   const ou = ourl ? officeUrls(it.ext, ourl) : null;
-  const read = PREVIEW_EXT.has(it.ext) && ou
-    ? `<a class="btn-read" href="javascript:void(0)" data-preview="1" data-embed="${esc(ou.embed)}" data-view="${esc(ou.view)}" data-title="${esc(it.name || "")}">在线预览</a>` : "";
-  // Release 通道链接自带附件头可直接下；jsd/proxy/raw 是跨域的，download 属性无效，交给统一 blob 下载（级联线路）
-  const dlCh = u.dl && !u.raw;
+  // 仅 git 内文件（有 raw 线路）可 blob 预览：代理线路对 Release 附件不带 CORS 头，页面内 fetch 会被拦
+  const blobAlts = !isOffice && !u.jsd && u.raw
+    ? JSON.stringify([u.proxy, u.proxy2, u.raw].filter(Boolean)) : "";
   // manifest 的 name 是去扩展名的 stem，落盘必须带真实扩展名，否则浏览器会按二进制流补 .txt
   const fname = it.ext && it.name && !it.name.toLowerCase().endsWith("." + it.ext)
     ? `${it.name}.${it.ext}` : (it.name || "file");
+  const read = canPreview(it.ext) && (ou || blobAlts)
+    ? `<a class="btn-read" href="javascript:void(0)" data-preview="1"${ou ? ` data-embed="${esc(ou.embed)}" data-view="${esc(ou.view)}"` : ` data-blob="${esc(blobAlts)}" data-mime="${esc(previewMime(it.ext))}" data-fname="${esc(fname)}"`} data-title="${esc(it.name || "")}">在线预览</a>` : "";
+  // Release 通道链接自带附件头可直接下；jsd/proxy/raw 是跨域的，download 属性无效，交给统一 blob 下载（级联线路）
+  const dlCh = u.dl && !u.raw;
   // 级联顺序：gcore（jsDelivr 备用域，cdn 被限流/污染时通常可达且快）→ ghfast 代理 → ghproxy.net 代理 → raw
   const alts = JSON.stringify([u.jsd2, u.proxy, u.proxy2, u.raw].filter(Boolean));
   const dlAttrs = dlCh ? `target="_blank" rel="noopener"` : `download data-dl="1" data-name="${esc(fname)}" data-alts='${esc(alts)}'`;
@@ -644,8 +659,54 @@ window.openPreview = (embed, view, title) => {
   $("#previewModal").hidden = false;
   document.body.style.overflow = "hidden";
 };
+// 大文件（>20MB 无 jsDelivr 线路的 PDF/图片/文本）预览：raw 直连国内常被墙导致 iframe 白屏，
+// 改为经级联代理线路（与下载同一套备用线路）fetch 成 blob 再交给 iframe 渲染；
+// mime 交给 Blob 以便 iframe 正确渲染，fname 用于「新窗口打开」时的落盘文件名
+let _previewBlobUrl = "";
+window.openBlobPreview = async (title, urls, mime, fname) => {
+  $("#previewTitle").textContent = `${title || "文档预览"}（加载中…）`;
+  $("#previewOpen").href = "#";
+  $("#previewFrame").src = "about:blank";
+  $("#previewModal").hidden = false;
+  document.body.style.overflow = "hidden";
+  const fmtMB = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(b / 1024)) + "KB";
+  for (const u of urls) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000); // 首字节 20 秒超时，同下载级联
+    try {
+      const resp = await fetch(u, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const total = +resp.headers.get("content-length") || 0;
+      let blob;
+      if (resp.body && resp.body.getReader) {
+        const reader = resp.body.getReader();
+        const chunks = []; let got = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value); got += value.length;
+          const pct = total ? ` ${Math.round((got / total) * 100)}%` : "";
+          $("#previewTitle").textContent = `${title || "文档预览"}（加载中${pct}）`;
+        }
+        blob = new Blob(chunks, mime ? { type: mime } : undefined);
+      } else {
+        blob = await resp.blob();
+      }
+      if (_previewBlobUrl) URL.revokeObjectURL(_previewBlobUrl);
+      _previewBlobUrl = URL.createObjectURL(blob);
+      $("#previewTitle").textContent = title || "文档预览";
+      $("#previewOpen").href = _previewBlobUrl;
+      $("#previewOpen").download = fname || title || "document.pdf";
+      $("#previewFrame").src = _previewBlobUrl;
+      return;
+    } catch (err) { clearTimeout(timer); /* 换下一条线路 */ }
+  }
+  $("#previewTitle").textContent = `${title || "文档预览"}（加载失败，请下载后查看）`;
+};
 window.closePreview = () => {
   $("#previewModal").hidden = true; $("#previewFrame").src = "about:blank"; document.body.style.overflow = "";
+  if (_previewBlobUrl) { URL.revokeObjectURL(_previewBlobUrl); _previewBlobUrl = ""; }
 };
 $("#previewModal").onclick = (e) => { if (e.target.id === "previewModal") closePreview(); };
 // 事件委托：文件卡是动态渲染的，统一在 document 上接管预览按钮点击
@@ -653,7 +714,8 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest("[data-preview]");
   if (!a) return;
   e.preventDefault();
-  openPreview(a.dataset.embed, a.dataset.view, a.dataset.title);
+  if (a.dataset.blob) openBlobPreview(a.dataset.title, JSON.parse(a.dataset.blob || "[]"), a.dataset.mime, a.dataset.fname);
+  else openPreview(a.dataset.embed, a.dataset.view, a.dataset.title);
 });
 
 /* ---------- 路由 ---------- */
