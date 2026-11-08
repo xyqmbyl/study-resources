@@ -8,7 +8,7 @@ let MANIFEST = null, FUSE = null, TREE = null;
 const topOf = (it) => (it.type === "file" && it.path ? it.path.split("/")[0] : it.subject || "其他");
 const underFolder = (it, folder) =>
   it.type === "file" && it.path
-    ? it.path === folder || it.path.startsWith(folder + "/")
+    ? it.path === folder || it.path.startsWith(folder + "/") || (folder === "其他" && !it.path.includes("/"))
     : !folder.includes("/") && topOf(it) === folder;
 
 const typeNames = { all: "全部", file: "文件", link: "视频课程", book: "电子书" };
@@ -188,6 +188,7 @@ function buildTree() {
   MANIFEST.items.forEach((it) => {
     if (navHiddenTop(it)) return; // 用户隐藏的顶级科目不进目录树
     const segs = it.type === "file" && it.path ? it.path.split("/").slice(0, -1) : [topOf(it)];
+    if (!segs.length) segs.push("其他"); // 根目录散落文件归入「其他」，目录树里也要能看到
     let node = root;
     for (const s of segs) {
       if (!s) continue;
