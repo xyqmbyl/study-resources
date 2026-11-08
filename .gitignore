@@ -13,7 +13,7 @@ Desktop.ini
 # 本地工具缓存
 .v2c/
 
-# 本地工具缓存
+# 本地临时目录
 .zcode/
 _PDF处理/
 __pycache__/

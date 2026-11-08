@@ -40,6 +40,8 @@ def file_entry(root: Path, f: Path, release_map: dict) -> dict | None:
         return None
     if "___" in rel or os.name == "nt" and f.name.startswith("~$"):
         return None
+    if f.name == ".gitkeep":  # 空文件夹占位符（git 不跟踪空目录），不算资源
+        return None
     parts = PurePosixPath(rel).parts
     # subject = 顶级科目文件夹；folder = 科目下的子路径（多级目录导航用）
     subject = parts[0] if len(parts) > 1 else "其他"
