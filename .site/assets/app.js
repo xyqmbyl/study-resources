@@ -434,14 +434,10 @@ $("#results").addEventListener("click", async (e) => {
   e.preventDefault();
   if (a.dataset.busy) return;
   a.dataset.busy = "1";
-  const url = a.href;
-  const name = a.dataset.name || decodeURIComponent((url.split("/").pop() || "").split("?")[0]) || "download";
+  const name = a.dataset.name || decodeURIComponent(((a.href || "").split("/").pop() || "").split("?")[0]) || "download";
   const orig = a.textContent;
   a.textContent = "下载中…";
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    const blob = await resp.blob();
+  const saveBlob = (blob) => {
     const objUrl = URL.createObjectURL(blob);
     const tmp = document.createElement("a");
     tmp.href = objUrl;
@@ -450,13 +446,23 @@ $("#results").addEventListener("click", async (e) => {
     tmp.click();
     tmp.remove();
     setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
-    a.textContent = orig;
-  } catch (err) {
-    a.textContent = orig;
-    window.open(url, "_blank", "noopener");
-  } finally {
-    delete a.dataset.busy;
+  };
+  // 级联线路：主链接 → data-alts 里的备用线路，全失败才开新页面
+  let candidates = [a.href];
+  try { for (const x of JSON.parse(a.dataset.alts || "[]")) if (x && !candidates.includes(x)) candidates.push(x); } catch (err2) {}
+  let ok = false;
+  for (const u2 of candidates) {
+    try {
+      const resp = await fetch(u2);
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      saveBlob(await resp.blob());
+      ok = true;
+      break;
+    } catch (err) { /* 换下一条线路 */ }
   }
+  a.textContent = orig;
+  if (!ok) window.open(candidates[0], "_blank", "noopener");
+  delete a.dataset.busy;
 });
 
 function cardHTML(it) {
@@ -470,10 +476,11 @@ function fileCard(it) {
   const dl = u.dl || u.jsd || u.proxy || u.raw || "#";
   const read = it.ext === "pdf" && (u.jsd || u.raw)
     ? `<a class="btn-read" href="${esc(u.jsd || u.raw)}" target="_blank" rel="noopener">在线阅读</a>` : "";
-  // Release 通道链接自带附件头可直接下；jsd/proxy/raw 是跨域的，download 属性无效，交给统一的 blob 下载拦截
+  // Release 通道链接自带附件头可直接下；jsd/proxy/raw 是跨域的，download 属性无效，交给统一 blob 下载（级联线路）
   const dlCh = u.dl && !u.raw;
-  const dlAttrs = dlCh ? `target="_blank" rel="noopener"` : `download data-dl="1" data-name="${esc(it.name || "file")}"`;
-  const altAttrs = dlCh ? `download` : `download data-dl="1" data-name="${esc(it.name || "file")}"`;
+  const alts = JSON.stringify([u.jsd, u.proxy, u.raw].filter(Boolean));
+  const dlAttrs = dlCh ? `target="_blank" rel="noopener"` : `download data-dl="1" data-name="${esc(it.name || "file")}" data-alts='${esc(alts)}'`;
+  const altAttrs = dlCh ? `download` : `download data-dl="1" data-name="${esc(it.name || "file")}" data-alts='${esc(alts)}'`;
   return `<div class="card">
     <div class="card-top">
       <span class="ftag ${extColor(it.ext)}">${esc((it.ext || "?").toUpperCase().slice(0, 4))}</span>
