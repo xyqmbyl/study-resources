@@ -875,8 +875,14 @@ async function enterAdmin() {
   $("#mvSubject").innerHTML = subs.map((s) => `<option>${esc(s)}</option>`).join("");
   $("#folderList").innerHTML = [...new Set(MANIFEST.items.filter((x) => x.folder).map((x) => x.subject + "/" + x.folder))]
     .map((f) => `<option value="${esc(f)}">`).join("");
-  fmState = { subject: "", folder: "" };
+  // 刷新后恢复上次的管理台位置：科目/文件夹/标签页/列表滚动
+  const lastFm = UISAVE.fm || {};
+  fmState = { subject: lastFm.subject || "", folder: lastFm.folder || "" };
+  $("#fmSubject").value = fmState.subject;
+  const lastTab = document.querySelector(`.tab[data-tab="${UISAVE.tab || "fm"}"]`);
+  if (lastTab) lastTab.click();
   renderFm();
+  $("#fmList").scrollTop = UISAVE.fmY || 0;
 }
 
 /* --- 标签页 --- */
@@ -1656,7 +1662,26 @@ $("#nfBtn").onclick = async () => {
 };
 
 
+/* ---------- 刷新保持界面状态（sessionStorage，本标签页内刷新不丢位置） ---------- */
+let UISAVE = {};
+try { UISAVE = JSON.parse(sessionStorage.getItem("ui_state") || "{}"); } catch (e) { UISAVE = {}; }
+function saveUI() {
+  try {
+    sessionStorage.setItem("ui_state", JSON.stringify({
+      tab: document.querySelector(".tab.active")?.dataset.tab || "fm",
+      fm: fmState, type: state.type, folder: state.folder, open: [...state.open], q: state.q,
+      y: window.scrollY, fmY: $("#fmList").scrollTop,
+    }));
+  } catch (e) {}
+}
+window.addEventListener("beforeunload", saveUI);
+
 /* ---------- 启动 ---------- */
+// 恢复上次界面状态（正文：搜索词/类型筛选/目录树选中与展开；管理台在 enterAdmin 里恢复）
+if (typeNames[UISAVE.type]) state.type = UISAVE.type;
+if (typeof UISAVE.folder === "string") state.folder = UISAVE.folder;
+if (Array.isArray(UISAVE.open) && UISAVE.open.length) state.open = new Set(UISAVE.open);
+if (UISAVE.q) { state.q = UISAVE.q; $("#searchInput").value = UISAVE.q; }
 window.addEventListener("hashchange", route);
 window.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -1677,5 +1702,7 @@ $("#searchInput").addEventListener("input", (e) => {
 
 initTheme();
 loadCustomWp().then(applyWallpaper); // 先取本地自定义壁纸再应用，避免闪烁到空背景
-loadManifest();
+loadManifest().then(() => { // 索引渲染完再恢复正文滚动位置
+  if (location.hash !== "#admin" && UISAVE.y > 0) window.scrollTo(0, UISAVE.y);
+});
 route();
