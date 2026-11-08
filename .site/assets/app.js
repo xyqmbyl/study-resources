@@ -154,10 +154,33 @@ function renderChips() {
   document.querySelectorAll("#typeChips .chip").forEach((b) => (b.onclick = () => { state.type = b.dataset.t; renderChips(); render(); }));
 }
 
+/* ---------- 导航自定义（只存本浏览器：顺序 + 隐藏顶级科目） ---------- */
+let NAVCUST = null;
+function navCust() {
+  if (!NAVCUST) { try { NAVCUST = JSON.parse(localStorage.getItem("navCustom")) || {}; } catch (e) { NAVCUST = {}; } }
+  if (!Array.isArray(NAVCUST.order)) NAVCUST.order = [];
+  if (!Array.isArray(NAVCUST.hidden)) NAVCUST.hidden = [];
+  return NAVCUST;
+}
+function saveNavCust() { localStorage.setItem("navCustom", JSON.stringify(NAVCUST || { order: [], hidden: [] })); }
+const navTopOf = (it) => (it.type === "file" && it.path ? it.path.split("/")[0] : topOf(it));
+const navHiddenTop = (it) => navCust().hidden.includes(navTopOf(it));
+function navOrder(names) {
+  const { order } = navCust();
+  return [...names].sort((a, b) => {
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    if (ia !== -1 && ib !== -1) return ia - ib;
+    if (ia !== -1) return -1;
+    if (ib !== -1) return 1;
+    return a.localeCompare(b, "zh");
+  });
+}
+
 /* ---------- 侧栏：多级目录树（复刻本地文件夹层级） ---------- */
 function buildTree() {
   const root = { ch: new Map() };
   MANIFEST.items.forEach((it) => {
+    if (navHiddenTop(it)) return; // 用户隐藏的顶级科目不进目录树
     const segs = it.type === "file" && it.path ? it.path.split("/").slice(0, -1) : [topOf(it)];
     let node = root;
     for (const s of segs) {
@@ -172,10 +195,9 @@ function buildTree() {
 
 function renderSidebar() {
   if (!TREE) TREE = buildTree();
-  const zhSort = (a, b) => a[0].localeCompare(b[0], "zh");
   const rows = [];
   const walk = (node, path, depth) => {
-    for (const [name, child] of [...node.ch.entries()].sort(zhSort)) {
+    for (const [name, child] of navOrder([...node.ch.keys()]).map((k) => [k, node.ch.get(k)])) {
       const p = path ? path + "/" + name : name;
       const open = state.open.has(p);
       const meta = MANIFEST.subjects[p];
@@ -190,10 +212,12 @@ function renderSidebar() {
   walk(TREE, "", 0);
   $("#sidebar").innerHTML =
     `<div class="subj-item ${state.folder === "" ? "active" : ""}" data-p=""><span>🏷️ 全部</span><span class="cnt">${MANIFEST.items.length}</span></div>` +
-    rows.join("");
+    rows.join("") +
+    `<div class="nav-tools"><button id="navCustomBtn" class="fm-op" style="margin-top:8px">⚙️ 自定义导航</button></div>`;
 }
 
 $("#sidebar").addEventListener("click", (e) => {
+  if (e.target.closest("#navCustomBtn")) { openNavModal(); return; }
   const row = e.target.closest("[data-p]");
   if (!row) return;
   const p = row.dataset.p;
@@ -213,6 +237,78 @@ $("#sidebar").addEventListener("click", (e) => {
   render();
   scrollToResults();
 });
+
+/* ---------- 导航自定义弹窗 ---------- */
+function openNavModal() {
+  navCust();
+  $("#navCustList").innerHTML = navOrder([...new Set(MANIFEST.items.map(navTopOf))])
+    .map((n) => {
+      const meta = MANIFEST.subjects[n];
+      const off = NAVCUST.hidden.includes(n);
+      return `<div class="navcust-row ${off ? "off" : ""}" data-n="${esc(n)}">
+        <label><input type="checkbox" data-chk="${esc(n)}" ${off ? "" : "checked"}> ${esc((meta && meta.icon) || "📁")} ${esc(n)}</label>
+        <span class="navcust-ops">
+          <button class="fm-op" data-mv="-1" title="上移">↑</button>
+          <button class="fm-op" data-mv="1" title="下移">↓</button>
+        </span></div>`;
+    }).join("");
+  document.getElementById("navModal").hidden = false;
+}
+$("#navCustList").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-mv]");
+  if (!btn) return;
+  const row = btn.closest(".navcust-row");
+  const names = navOrder([...new Set(MANIFEST.items.map(navTopOf))]);
+  const i = names.indexOf(row.dataset.n);
+  const j = i + +btn.dataset.mv;
+  if (j < 0 || j >= names.length) return;
+  const swapped = names.slice();
+  [swapped[i], swapped[j]] = [swapped[j], swapped[i]];
+  navCust().order = swapped; // 把完整显示顺序写入自定义，后续只动相对位置
+  saveNavCust(); TREE = null; renderSidebar(); render(); openNavModal();
+});
+$("#navCustList").addEventListener("change", (e) => {
+  const chk = e.target.closest("[data-chk]");
+  if (!chk) return;
+  const n = chk.dataset.chk;
+  const { hidden } = navCust();
+  chk.checked ? NAVCUST.hidden = hidden.filter((x) => x !== n) : hidden.push(n);
+  saveNavCust(); TREE = null;
+  if (state.folder && NAVCUST.hidden.includes(state.folder.split("/")[0])) state.folder = "";
+  renderSidebar(); render(); openNavModal();
+});
+$("#navCustReset").onclick = () => {
+  NAVCUST = null; localStorage.removeItem("navCustom");
+  TREE = null; state.folder = ""; renderSidebar(); render(); openNavModal();
+};
+
+/* ---------- 侧栏拖拽分隔条（宽度存本浏览器） ---------- */
+(() => {
+  const saved = +localStorage.getItem("sbw");
+  if (saved) document.documentElement.style.setProperty("--sbw", Math.min(480, Math.max(160, saved)) + "px");
+  const sp = document.querySelector(".splitter");
+  if (!sp) return;
+  let startX = 0, startW = 0;
+  sp.addEventListener("pointerdown", (e) => {
+    startX = e.clientX;
+    startW = document.querySelector(".sidebar").getBoundingClientRect().width;
+    sp.classList.add("dragging");
+    sp.setPointerCapture(e.pointerId);
+  });
+  sp.addEventListener("pointermove", (e) => {
+    if (!sp.classList.contains("dragging")) return;
+    const w = Math.min(480, Math.max(160, startW + e.clientX - startX));
+    document.documentElement.style.setProperty("--sbw", w + "px");
+  });
+  const end = (e) => {
+    if (!sp.classList.contains("dragging")) return;
+    sp.classList.remove("dragging");
+    const w = Math.min(480, Math.max(160, startW + e.clientX - startX));
+    localStorage.setItem("sbw", w);
+  };
+  sp.addEventListener("pointerup", end);
+  sp.addEventListener("pointercancel", end);
+})();
 
 /* ---------- 列表 ---------- */
 // 滚到结果区第一个内容（面包屑/分组标题）上方一点，不回到页顶、侧栏不动
@@ -244,6 +340,7 @@ function smartSearch(q) {
 function render() {
   let items = MANIFEST.items;
   if (state.q) items = smartSearch(state.q); // 先搜索，再让目录/类型筛选继续生效
+  items = items.filter((x) => !navHiddenTop(x)); // 隐藏科目的资料在「全部」里也不出现（搜索除外则保留——此处统一隐藏）
   if (state.folder) items = items.filter((x) => underFolder(x, state.folder));
   if (state.type !== "all") items = items.filter((x) => x.type === state.type);
   const box = document.getElementById("results");
