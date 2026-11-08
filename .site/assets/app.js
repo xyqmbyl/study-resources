@@ -457,26 +457,32 @@ $("#results").addEventListener("click", async (e) => {
   const a = e.target.closest("a[data-dl]");
   if (!a) return;
   e.preventDefault();
+  // 下载中的 ✕ = 取消下载：中止当前请求
+  if (e.target.closest(".dl-x")) {
+    if (a._dlCtrl) { a._dlCtrl.__user = true; a._dlCtrl.abort(); }
+    return;
+  }
   if (a.dataset.busy) return;
   a.dataset.busy = "1";
   const name = a.dataset.name || decodeURIComponent(((a.href || "").split("/").pop() || "").split("?")[0]) || "download";
-  const orig = a.textContent;
-  // 迷你进度显示：直接画在按钮上（文字 + 底色填充），不占卡片额外空间
+  const orig = a.innerHTML;
+  // 迷你进度显示：直接画在按钮上（文字 + 底色填充 + 取消小叉号），不占卡片额外空间
   const fmtMB = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(b / 1024)) + "KB";
   const fmtSpd = (s) => s >= 1048576 ? (s / 1048576).toFixed(1) + "MB/s" : Math.max(1, Math.round(s / 1024)) + "KB/s";
   const paint = (got, total, bps) => {
     a.style.fontSize = "11.5px";
     a.style.whiteSpace = "nowrap";
     a.style.overflow = "hidden";
+    const txt = total
+      ? `${Math.min(100, Math.round((got / total) * 100))}% ${fmtSpd(bps)}`
+      : `${fmtMB(got)} ${fmtSpd(bps)}`;
     if (total) {
       const pct = Math.min(100, Math.round((got / total) * 100));
-      a.textContent = `${pct}% ${fmtSpd(bps)}`;
       a.style.backgroundImage = `linear-gradient(90deg, rgba(0,0,0,.22) ${pct}%, rgba(255,255,255,.18) ${pct}%)`;
-    } else {
-      a.textContent = `${fmtMB(got)} ${fmtSpd(bps)}`;
     }
+    a.innerHTML = `<span class="dl-t">${txt}</span><span class="dl-x" title="取消下载">✕</span>`;
   };
-  const resetPaint = () => { a.textContent = orig; a.style.backgroundImage = ""; a.style.fontSize = ""; a.style.whiteSpace = ""; };
+  const resetPaint = () => { a.innerHTML = orig; a.style.backgroundImage = ""; a.style.fontSize = ""; a.style.whiteSpace = ""; a.style.overflow = ""; };
   const saveBlob = (blob) => {
     const objUrl = URL.createObjectURL(blob);
     const tmp = document.createElement("a");
@@ -490,12 +496,14 @@ $("#results").addEventListener("click", async (e) => {
   // 级联线路：主链接 → data-alts 里的备用线路，全失败才开新页面
   let candidates = [a.href];
   try { for (const x of JSON.parse(a.dataset.alts || "[]")) if (x && !candidates.includes(x)) candidates.push(x); } catch (err2) {}
-  let ok = false;
-  a.textContent = "连接中…";
+  let ok = false, cancelled = false;
+  a.style.fontSize = "11.5px"; a.style.whiteSpace = "nowrap"; a.style.overflow = "hidden";
+  a.innerHTML = `<span class="dl-t">连接中…</span><span class="dl-x" title="取消下载">✕</span>`;
   // 每条线路给 20 秒首字节超时（线路被墙时常表现为长时间无响应），
   // 响应头到达后解除超时，慢线路（如代理几百 KB/s）也能完整下完
   for (const u2 of candidates) {
     const ctrl = new AbortController();
+    a._dlCtrl = ctrl;
     const timer = setTimeout(() => ctrl.abort(), 20000);
     try {
       const resp = await fetch(u2, { signal: ctrl.signal });
@@ -519,10 +527,15 @@ $("#results").addEventListener("click", async (e) => {
       }
       ok = true;
       break;
-    } catch (err) { clearTimeout(timer); /* 换下一条线路 */ }
+    } catch (err) {
+      clearTimeout(timer);
+      // 用户点了 ✕：不再换线路，直接退出
+      if (ctrl.signal.aborted && ctrl.__user) { cancelled = true; break; }
+      /* 否则换下一条线路 */
+    }
   }
   resetPaint();
-  if (!ok) window.open(candidates[0], "_blank", "noopener");
+  if (!ok && !cancelled) window.open(candidates[0], "_blank", "noopener");
   delete a.dataset.busy;
 });
 
@@ -532,11 +545,15 @@ function cardHTML(it) {
   return fileCard(it);
 }
 
+// 可在线预览的文档类型：PDF 浏览器原生渲染；Word/PPT 走微软 Office Web Viewer（服务器端抓取公开 URL 渲染，对所有访客可用）
+const PREVIEW_EXT = new Set(["pdf", "doc", "docx", "ppt", "pptx"]);
+
 function fileCard(it) {
   const u = it.urls || {};
   const dl = u.dl || u.jsd || u.proxy || u.raw || "#";
-  const read = it.ext === "pdf" && (u.jsd || u.jsd2 || u.raw)
-    ? `<a class="btn-read" href="${esc(u.jsd || u.jsd2 || u.raw)}" target="_blank" rel="noopener">在线阅读</a>` : "";
+  const purl = u.jsd || u.jsd2 || u.raw;
+  const read = PREVIEW_EXT.has(it.ext) && purl
+    ? `<a class="btn-read" href="javascript:void(0)" data-preview="1" data-src="${esc(purl)}" data-view="${esc(officeViewUrl(it.ext, purl))}" data-title="${esc(it.name || "")}">在线预览</a>` : "";
   // Release 通道链接自带附件头可直接下；jsd/proxy/raw 是跨域的，download 属性无效，交给统一 blob 下载（级联线路）
   const dlCh = u.dl && !u.raw;
   // 级联顺序：gcore（jsDelivr 备用域，cdn 被限流/污染时通常可达且快）→ ghfast 代理 → ghproxy.net 代理 → raw
@@ -600,6 +617,32 @@ window.closeModal = () => {
   $("#videoModal").hidden = true; $("#videoFrame").innerHTML = ""; document.body.style.overflow = "";
 };
 $("#videoModal").onclick = (e) => { if (e.target.id === "videoModal") closeModal(); };
+
+/* ---------- 文档在线预览 ---------- */
+// Office 文件的新窗口查看地址（微软服务器端抓取文件渲染，访客浏览器只需加载微软页面）
+function officeViewUrl(ext, url) {
+  return ["doc", "docx", "ppt", "pptx"].includes(ext)
+    ? `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(url)}`
+    : url; // PDF 直接由浏览器原生渲染
+}
+window.openPreview = (src, view, title) => {
+  $("#previewTitle").textContent = title || "文档预览";
+  $("#previewOpen").href = view || src;
+  $("#previewFrame").src = src;
+  $("#previewModal").hidden = false;
+  document.body.style.overflow = "hidden";
+};
+window.closePreview = () => {
+  $("#previewModal").hidden = true; $("#previewFrame").src = "about:blank"; document.body.style.overflow = "";
+};
+$("#previewModal").onclick = (e) => { if (e.target.id === "previewModal") closePreview(); };
+// 事件委托：文件卡是动态渲染的，统一在 document 上接管预览按钮点击
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-preview]");
+  if (!a) return;
+  e.preventDefault();
+  openPreview(a.dataset.src, a.dataset.view, a.dataset.title);
+});
 
 /* ---------- 路由 ---------- */
 function route() {
@@ -1049,6 +1092,10 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (location.hash) location.hash = "";
     $("#searchInput").focus();
+  }
+  if (e.key === "Escape") {
+    if (!$("#previewModal").hidden) closePreview();
+    if (!$("#videoModal").hidden) closeModal();
   }
 });
 let _deb;
