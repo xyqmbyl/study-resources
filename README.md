@@ -9,7 +9,8 @@
 **👉 [点此进入在线网站](https://xyqmbyl.github.io/study-resources/)**
 
 本人是26级软件工程学生，在寻找真题与教学资源时发现缺乏一个全面并且易得的整合资源站。
-在中南大学2024教学改革后旧有的资料库都有些过时，最新的资源隐藏在QQ群与公众号中不易获取，故尽自己所能开源，希望有资源补充的同学能来一起共建这个学习平台
+在中南大学2024教学改革后旧有的资料库都有些过时，最新的资源隐藏在QQ群与公众号中不易获取，故尽自己所能把能找到的最新最全面的资源开源。
+希望有资源补充的同学能来一起共建这个学习平台
 历年真题、复习笔记、课件 PPT、教材电子书、视频课程，一站式检索与下载。
 
 ## 🧭 中南大学资源导航（与本库互补）
@@ -19,10 +20,10 @@ GitHub 上还有几位学长收集的优质的中南资料库，与本项目**�
 
 | 仓库 | 定位 | 推荐场景 |
 |---|---|---|
-| [FeijiangHan/CSU-CS-review-materials](https://github.com/FeijiangHan/CSU-CS-review-materials) ★270 | 按年级学期组织的**计科复习资料 + 学习方法论**，覆盖 web、人机交互、体系结构、分布式、嵌入式等 | 想要**怎么复习、学什么重点**的思路时看它 |
-| [zhiyog/CSU\_learn\_class](https://github.com/zhiyog/CSU_learn_class) | 计科核心课（C++、Java、Linux、操作系统、大物等）的**个人笔记与总结** | 需要一份**浓缩笔记**快速过课时看它 |
-| [LIJIAXU137/CSU-SE-FinalExamination](https://github.com/LIJIAXU137/CSU-SE-FinalExamination) | **软件工程专业**期末资料（大二上/下） | 软工同学的期末冲刺 |
-| [Jinyong-Li/CSU-Courses](https://github.com/Jinyong-Li/CSU-Courses) | **中南大学课程共享计划**，通识课覆盖广（公选、军理、制造训练、健康心理等） | 找**非计科/通识课**资料看它 |
+| [FeijiangHan/CSU-CS-review-materials](https://github.com/FeijiangHan/CSU-CS-review-materials) ★270 | 按年级学期组织的**计科复习资料 + 学习方法论**，覆盖 web、人机交互、体系结构、分布式、嵌入式等 |
+| [zhiyog/CSU\_learn\_class](https://github.com/zhiyog/CSU_learn_class) | 计科核心课（C++、Java、Linux、操作系统、大物等）的**个人笔记与总结**|
+| [LIJIAXU137/CSU-SE-FinalExamination](https://github.com/LIJIAXU137/CSU-SE-FinalExamination) | **软件工程专业**期末资料（大二上/下） |
+| [Jinyong-Li/CSU-Courses](https://github.com/Jinyong-Li/CSU-Courses) | **中南大学课程共享计划**，通识课覆盖广（公选、军理、制造训练、健康心理等） |
 
 > 本库的优势是**检索体验**：在线网站按目录树浏览、全文搜索、在线预览、多线路下载；上面的仓库则提供更多科目的攻略与笔记。两边都逛逛，资料就齐了。
 
