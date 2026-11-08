@@ -256,6 +256,10 @@ function openNavModal() {
   document.getElementById("navModal").hidden = false;
 }
 $("#navCustomBtn").addEventListener("click", openNavModal);
+// 点击弹层外的空白遮罩关闭（拖拽中因指针被行捕获，松手在遮罩上也不会误关）
+document.getElementById("navModal").addEventListener("click", (e) => {
+  if (e.target === document.getElementById("navModal")) document.getElementById("navModal").hidden = true;
+});
 // 拖拽磁吸排序：按住 ⠿ 上下拖，经过相邻行时整行让位（带过渡动画），松手落位；
 // 指针接近弹窗可视区上下边缘时自动滚动，落点计算包含滚动量
 (() => {
