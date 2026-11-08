@@ -1,0 +1,51 @@
+name: 构建索引并部署网站
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "site/manifest.json"
+      - "README.md"
+      - "**.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 生成索引
+        run: python3 scripts/build_manifest.py
+        env:
+          REPO: ${{ github.repository }}
+      - name: 提交索引（如有变化）
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet site/manifest.json; then
+            git add site/manifest.json
+            git commit -m "chore: 重建索引 [skip ci]"
+            git push
+          fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

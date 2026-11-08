@@ -1,0 +1,122 @@
+[
+  {
+    "subject": "C语言",
+    "title": "浙江大学翁恺教你C语言程序设计！C语言基础入门！",
+    "url": "https://www.bilibili.com/video/BV1dr4y1n7vA",
+    "author": "翁恺c语言",
+    "verified": true,
+    "note": "浙江大学翁恺主讲，共100集，播放量超2100万，国家精品课"
+  },
+  {
+    "subject": "Java",
+    "title": "黑马程序员Java零基础视频教程_上部(Java入门，含斯坦福大学练习题+力扣算法题和大厂java面试题）",
+    "url": "https://www.bilibili.com/video/BV17F411T7Ao",
+    "author": "黑马程序员",
+    "verified": true,
+    "note": "Java零基础入门上部，约200集，含练习题与面试题，播放量超2700万"
+  },
+  {
+    "subject": "C++",
+    "title": "黑马程序员匠心之作|C++教程从0到1入门编程,学习编程不再难",
+    "url": "https://www.bilibili.com/video/BV1et411b73Z",
+    "author": "黑马程序员",
+    "verified": true,
+    "note": "C++从入门到提高共314集，含3个实战项目，播放量超4800万"
+  },
+  {
+    "subject": "web程序设计",
+    "title": "3小时前端入门教程（HTML+CSS+JS）",
+    "url": "https://www.bilibili.com/video/BV1BT4y1W7Aw",
+    "author": "罗大富Bigrich",
+    "verified": true,
+    "note": "HTML/CSS/JS 三剑客快速入门，共23集，播放量超180万"
+  },
+  {
+    "subject": "web程序设计",
+    "title": "html+css教程，前端html5+css3零基础入门，web前端开发",
+    "url": "https://www.bilibili.com/video/BV1p84y1P7Z5",
+    "author": "尚硅谷",
+    "verified": true,
+    "note": "HTML5+CSS3 系统入门共199集，含实战项目，播放量超330万"
+  },
+  {
+    "subject": "数据结构",
+    "title": "浙江大学数据结构 陈越",
+    "url": "https://www.bilibili.com/video/BV1H4411N7oD",
+    "author": "平凡走向不凡",
+    "verified": true,
+    "note": "浙江大学陈越主讲，共145集，配套中国大学MOOC国家精品课"
+  },
+  {
+    "subject": "人工智能",
+    "title": "[中英字幕]吴恩达机器学习系列课程",
+    "url": "https://www.bilibili.com/video/BV164411b7dx",
+    "author": "岁月觞",
+    "verified": true,
+    "note": "吴恩达经典机器学习课中英字幕版，共112集，播放量超510万"
+  },
+  {
+    "subject": "操作系统",
+    "title": "王道计算机考研 操作系统",
+    "url": "https://www.bilibili.com/video/BV1YE411D7nH",
+    "author": "王道计算机教育",
+    "verified": true,
+    "note": "王道考研操作系统全程课，按章节分集，播放量超2400万"
+  },
+  {
+    "subject": "计算机网络",
+    "title": "王道计算机考研 计算机网络",
+    "url": "https://www.bilibili.com/video/BV19E411D78Q",
+    "author": "王道计算机教育",
+    "verified": true,
+    "note": "王道考研计算机网络全程课，物理层到应用层，播放量超1900万"
+  },
+  {
+    "subject": "计算机网络",
+    "title": "中科大郑烇、杨坚全套《计算机网络（自顶向下方法，James F.Kurose，Keith W.Ross）》课程",
+    "url": "https://www.bilibili.com/video/BV1JV411t7ow",
+    "author": "中科大-郑烇老师",
+    "verified": true,
+    "note": "中科大郑烇主讲，Kurose《自顶向下方法》配套，共69集，播放量超400万"
+  },
+  {
+    "subject": "计算机组成原理",
+    "title": "王道计算机考研 计算机组成原理",
+    "url": "https://www.bilibili.com/video/BV1ps4y1d73V",
+    "author": "王道计算机教育",
+    "verified": true,
+    "note": "王道考研计组全程课，第1-7章完整分集，播放量超1800万"
+  },
+  {
+    "subject": "计算机体系结构",
+    "title": "计算机体系结构 - 国防科技大学(35讲)",
+    "url": "https://www.bilibili.com/video/BV1aJ411g7LM",
+    "author": "__rec",
+    "verified": true,
+    "note": "国防科技大学体系结构课程搬运，共35讲，涵盖流水线、Cache、并行处理"
+  },
+  {
+    "subject": "软件工程",
+    "title": "北京大学-软件工程（国家级精品课）课堂录播–孙艳春老师",
+    "url": "https://www.bilibili.com/video/BV1Vt411V72G",
+    "author": "五味666",
+    "verified": true,
+    "note": "北京大学孙艳春主讲国家级精品课，共53集，含UML与软件测试"
+  },
+  {
+    "subject": "编译原理",
+    "title": "【编译原理】哈工大公开课（高清版）",
+    "url": "https://www.bilibili.com/video/BV1dL4y1H7T8",
+    "author": "荟呀荟学习",
+    "verified": true,
+    "note": "哈工大编译原理公开课，共81集，从词法分析到代码优化完整覆盖"
+  },
+  {
+    "subject": "汇编语言",
+    "title": "【8086汇编入门】《零基础入门学习汇编语言》",
+    "url": "https://www.bilibili.com/video/BV1Rs411c7HG",
+    "author": "鱼C-小甲鱼",
+    "verified": true,
+    "note": "小甲鱼配套王爽《汇编语言》教材，8086汇编零基础入门，播放量超160万"
+  }
+]

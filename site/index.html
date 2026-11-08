@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CSU 学习资源库</title>
+<meta name="description" content="中南大学学习资源共享站：真题、笔记、PPT、电子书与视频课程一站式检索下载">
+<link rel="stylesheet" href="assets/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#">📚 CSU 学习资源库</a>
+  <div class="topbar-right">
+    <button id="btnTheme" class="icon-btn" title="切换深浅色">🌙</button>
+    <a class="gh-link" href="https://github.com/xyqmbyl/study-resources" target="_blank" title="GitHub 仓库">⭐ GitHub</a>
+  </div>
+</header>
+
+<main id="app">
+  <!-- 首页 -->
+  <section id="viewHome">
+    <div class="hero">
+      <p class="hero-kicker" id="heroKicker">资源共享 · 一起卷</p>
+      <h1 class="hero-title">找资料，<em>一秒</em>就够了</h1>
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input id="searchInput" type="search" placeholder="搜文件名 / 标签 / 科目，试试 sjjg 或 真题" autocomplete="off">
+        <kbd class="search-kbd">Ctrl K</kbd>
+        <button id="searchClear" class="search-clear" hidden>✕</button>
+      </div>
+      <div class="hero-meta" id="heroMeta"></div>
+    </div>
+
+    <div class="chips" id="typeChips"></div>
+    <div class="layout">
+      <aside class="sidebar" id="sidebar"></aside>
+      <section class="content">
+        <div id="results"></div>
+      </section>
+    </div>
+  </section>
+
+  <!-- 管理页 -->
+  <section id="viewAdmin" hidden>
+    <div class="admin-box">
+      <h2>管理台</h2>
+      <p class="admin-hint">用 GitHub Token（需 repo 写权限）登录，可在网页/手机上直接上传与替换文件。</p>
+      <div id="adminLoginBox">
+        <input id="adminToken" type="password" placeholder="ghp_ / github_pat_ 开头的 Fine-grained Token">
+        <button id="adminLogin" class="btn primary">进入管理台</button>
+      </div>
+      <div id="adminPanel" hidden>
+        <div class="admin-grid">
+          <div class="admin-card">
+            <h3>上传新文件</h3>
+            <label>科目文件夹</label>
+            <select id="upSubject"></select>
+            <input id="upFile" type="file" multiple>
+            <button id="upBtn" class="btn primary">上传</button>
+            <div id="upLog" class="log"></div>
+          </div>
+          <div class="admin-card">
+            <h3>替换 / 更新文件</h3>
+            <label>按仓库路径</label>
+            <input id="rpPath" list="pathList" placeholder="例：数据结构/2024期末真题A.pdf">
+            <datalist id="pathList"></datalist>
+            <input id="rpFile" type="file">
+            <button id="rpBtn" class="btn primary">替换</button>
+            <div id="rpLog" class="log"></div>
+          </div>
+        </div>
+        <button id="adminLogout" class="btn ghost">退出登录并清除 Token</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- 视频弹层 -->
+<div id="videoModal" class="modal" hidden>
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div id="videoFrame"></div>
+  </div>
+</div>
+
+<footer class="footer">
+  <p>同学共建 · 自取自用 · 欢迎补充 <a href="https://github.com/xyqmbyl/study-resources" target="_blank">GitHub</a> · <a href="#admin">管理台</a></p>
+</footer>
+
+<script src="assets/fuse.min.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
