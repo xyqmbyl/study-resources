@@ -6,7 +6,7 @@
 - 链接条目: 合并 site/_data/*.json (type: link / book)
 """
 import json, hashlib, os, sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from datetime import datetime, timezone, timedelta
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,7 +44,8 @@ def file_entry(root: Path, f: Path, release_map: dict) -> dict | None:
     urls = {}
     in_git = True
     if rel in release_map:
-        urls["dl"] = release_map[rel]
+        meta = release_map[rel]
+        urls["dl"] = meta["url"] if isinstance(meta, dict) else meta
         in_git = False
     else:
         if size <= JSDELIVR_MAX:
@@ -115,6 +116,27 @@ def main():
             subjects[sub]["count"] += 1
 
     files.sort(key=lambda x: x.get("ts", 0), reverse=True)
+
+    # Release 通道大文件：CI 服务器磁盘上没有这些文件，按映射补齐条目
+    existing_paths = {x.get("path") for x in files}
+    today = datetime.now(CN_TZ).strftime("%Y-%m-%d")
+    for rel, meta in release_map.items():
+        if rel in existing_paths:
+            continue
+        url = meta["url"] if isinstance(meta, dict) else meta
+        size = meta.get("size", 0) if isinstance(meta, dict) else 0
+        pp = PurePosixPath(rel)
+        subject = pp.parent.as_posix()
+        files.append({
+            "type": "file", "id": stable_id(rel), "subject": subject,
+            "name": pp.stem, "ext": pp.suffix.lstrip(".").lower(), "size": size,
+            "updated": today, "ts": 0, "path": rel, "urls": {"dl": url},
+        })
+        if subject not in subjects:
+            sm = SUBJECT_META.get(subject, (subject[:4].lower(), "📁"))
+            subjects[subject] = {"py": sm[0], "icon": sm[1], "count": 0}
+        subjects[subject]["count"] += 1
+
     manifest = {
         "generated": datetime.now(CN_TZ).strftime("%Y-%m-%d %H:%M"),
         "repo": REPO,
