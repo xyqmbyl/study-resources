@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>中南大学资源共享库</title>
 <meta name="description" content="中南大学资源共享库：真题、笔记、PPT、电子书与视频课程一站式检索下载">
-<link rel="stylesheet" href="assets/style.css?v=20261108-1618">
+<link rel="stylesheet" href="assets/style.css?v=20261108-1629">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
 </head>
 <body>
@@ -45,26 +45,26 @@
   <section id="viewAdmin" hidden>
     <div class="admin-box">
       <h2>管理台</h2>
-      <p class="admin-hint">用 GitHub Token（需仓库写权限）登录，可在网页/手机上直接上传、替换、移动、删除资料。Token 只保存在你自己的浏览器里。</p>
+      <p class="admin-hint">用 GitHub Token 登录：<b>有仓库写权限</b>（协作者）→ 管理员模式，可直接上传、替换、移动、删除资料；<b>无写权限</b>（普通同学）→ 投稿模式，同样能上传资料，系统自动 Fork + 提 PR，管理员合并后上线。Token 只保存在你自己的浏览器里。</p>
       <div id="adminLoginBox">
         <input id="adminToken" type="password" placeholder="github_pat_ / ghp_ 开头的 Fine-grained Token">
         <button id="adminLogin" class="btn primary">进入管理台</button>
         <details class="token-help">
-          <summary>❓ 没有 Token？点开三步获取教程</summary>
+          <summary>❓ 没有 Token？点开三步获取教程（普通同学投稿同样需要）</summary>
           <ol>
-            <li>打开 <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>（需先登录 GitHub，需要管理员给你开通仓库权限）</li>
-            <li>Token name 随意填；Repository access 选 <b>Only select repositories</b> → 选 <b>study-resources</b></li>
+            <li>打开 <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a>（需先登录 GitHub）</li>
+            <li>Token name 随意填；Repository access 选 <b>All repositories</b>（普通同学投稿需要访问你自己账号下的 Fork，不能只选本仓库）</li>
             <li>Permissions → Repository permissions → <b>Contents</b> 设为 <b>Read and write</b>，其余不用动 → Generate token</li>
             <li>复制生成的 token（github_pat_ 开头）粘贴到上面输入框</li>
           </ol>
-          <p class="admin-hint">没有写权限？看 <a href="https://github.com/xyqmbyl/study-resources#如何贡献" target="_blank">贡献指南</a>：Fork 后在 GitHub 网页端上传再提 PR，或直接 <a href="https://github.com/xyqmbyl/study-resources/issues/new/choose" target="_blank">开 Issue</a> 求资源。</p>
+          <p class="admin-hint">没有 GitHub 账号或不想折腾？看 <a href="https://github.com/xyqmbyl/study-resources#如何贡献" target="_blank">贡献指南</a>：直接 <a href="https://github.com/xyqmbyl/study-resources/issues/new/choose" target="_blank">开 Issue</a> 求资源也行。</p>
         </details>
       </div>
       <div id="adminPanel" hidden>
         <p id="adminMsg"></p>
         <div class="tabs" id="adminTabs">
           <button class="tab active" data-tab="fm">📁 文件管理</button>
-          <button class="tab" data-tab="up">⬆ 上传</button>
+          <button class="tab" data-tab="up">⬆ 上传 / 投稿</button>
           <button class="tab" data-tab="nf">➕ 新建文件夹</button>
         </div>
 
@@ -148,6 +148,6 @@
 </footer>
 
 <script src="assets/fuse.min.js"></script>
-<script src="assets/app.js?v=20261108-1618"></script>
+<script src="assets/app.js?v=20261108-1629"></script>
 </body>
 </html>

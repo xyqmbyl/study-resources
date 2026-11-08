@@ -393,16 +393,17 @@ const fileB64 = (file) => new Promise((res, rej) => {
 
 // Git Data API：把一批变更（上传/替换/移动/删除）打包成单个 commit，避免逐文件提交
 // change: {op:"put", path, content(b64)} | {op:"rm", path} | {op:"mv", from, to}
-async function commitChanges(changes, message) {
-  const ref = await ghApi(`/repos/${REPO}/git/ref/heads/main`);
-  const head = await ghApi(`/repos/${REPO}/git/commits/${ref.object.sha}`);
+// dest: 提交目标，默认本仓库 main；投稿模式传 {repo:"用户名/study-resources", branch:"submit-xxx"}
+async function commitChanges(changes, message, dest = { repo: REPO, branch: "main" }) {
+  const ref = await ghApi(`/repos/${dest.repo}/git/ref/heads/${dest.branch}`);
+  const head = await ghApi(`/repos/${dest.repo}/git/commits/${ref.object.sha}`);
   const tree = [];
   for (const ch of changes) {
     if (ch.op === "put") {
-      const b = await ghApi(`/repos/${REPO}/git/blobs`, { method: "POST", body: { content: ch.content, encoding: "base64" } });
+      const b = await ghApi(`/repos/${dest.repo}/git/blobs`, { method: "POST", body: { content: ch.content, encoding: "base64" } });
       tree.push({ path: ch.path, mode: "100644", type: "blob", sha: b.sha });
     } else if (ch.op === "mv") {
-      const sha = ch.sha || (await ghApi(`/repos/${REPO}/contents/${encodeURI(ch.from)}`)).sha;
+      const sha = ch.sha || (await ghApi(`/repos/${dest.repo}/contents/${encodeURI(ch.from)}`)).sha;
       tree.push({ path: ch.to, mode: "100644", type: "blob", sha });
       tree.push({ path: ch.from, mode: "100644", type: "blob", sha: null });
     } else if (ch.op === "rm") {
@@ -410,14 +411,53 @@ async function commitChanges(changes, message) {
     }
   }
   if (!tree.length) return null;
-  const nt = await ghApi(`/repos/${REPO}/git/trees`, { method: "POST", body: { base_tree: head.tree.sha, tree } });
-  const nc = await ghApi(`/repos/${REPO}/git/commits`, { method: "POST", body: { message, tree: nt.sha, parents: [ref.object.sha] } });
-  await ghApi(`/repos/${REPO}/git/refs/heads/main`, { method: "PATCH", body: { sha: nc.sha } });
+  const nt = await ghApi(`/repos/${dest.repo}/git/trees`, { method: "POST", body: { base_tree: head.tree.sha, tree } });
+  const nc = await ghApi(`/repos/${dest.repo}/git/commits`, { method: "POST", body: { message, tree: nt.sha, parents: [ref.object.sha] } });
+  await ghApi(`/repos/${dest.repo}/git/refs/heads/${dest.branch}`, { method: "PATCH", body: { sha: nc.sha } });
   return nc.sha;
 }
 
-const decodeB64Text = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\n/g, "")), (c) => c.charCodeAt(0)));
-const encodeB64 = (str) => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+/* --- 投稿模式（无写权限）：自动 Fork 本仓库到用户账号并创建投稿分支 --- */
+let MY_LOGIN = null;
+async function ensureForkAndBranch(logSel = "#upLog") {
+  if (!MY_LOGIN) MY_LOGIN = (await ghApi("/user")).login;
+  const name = REPO.split("/")[1];
+  let fork = `${MY_LOGIN}/${name}`;
+  try {
+    await ghApi(`/repos/${fork}`);
+  } catch {
+    log(`你的账号还没有本仓库的 Fork，正在创建（约几秒到 1 分钟）…`, logSel);
+    let f;
+    try {
+      f = await ghApi(`/repos/${REPO}/forks`, { method: "POST", body: {} });
+    } catch (e) {
+      throw new Error(`创建 Fork 失败（${e.message}）。常见原因：Token 的 Repository access 没选 All repositories。可到本仓库页面手动点 Fork 后重试。`);
+    }
+    fork = f.full_name;
+    let ok = false;
+    for (let i = 0; i < 60; i++) {
+      try { await ghApi(`/repos/${fork}`); ok = true; break; }
+      catch { await new Promise((r) => setTimeout(r, 2000)); }
+    }
+    if (!ok) throw new Error(`Fork 创建超时，请稍后重试，或先手动 Fork 本仓库再投稿`);
+  }
+  const upstream = await ghApi(`/repos/${REPO}/git/ref/heads/main`);
+  const branch = "submit-" + Date.now().toString(36);
+  try {
+    await ghApi(`/repos/${fork}/git/refs`, { method: "POST", body: { ref: "refs/heads/" + branch, sha: upstream.object.sha } });
+  } catch (e) {
+    if (String(e.message).startsWith("GitHub API 422")) {
+      // 分支名撞车（极小概率）：换一个再试
+      const b2 = "submit-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+      await ghApi(`/repos/${fork}/git/refs`, { method: "POST", body: { ref: "refs/heads/" + b2, sha: upstream.object.sha } });
+      return { repo: fork, branch: b2, owner: MY_LOGIN };
+    }
+    throw new Error(`在 Fork 中创建投稿分支失败（${e.message}）。若提示 403/404，多半是 Token 的 Repository access 只选了本仓库——投稿需要能访问你自己账号下的 Fork，请重建 Token 选 All repositories。`);
+  }
+  return { repo: fork, branch, owner: MY_LOGIN };
+}
+
+const decodeB64Text = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\n/g, "")), (c) => c.charCodeAt(0)));const encodeB64 = (str) => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
 const relOf = (v) => String(v || "").trim().replace(/^\/+|\/+$/g, "");
 const isDl = (it) => it.urls?.dl && !it.urls?.raw; // Release 通道大文件（不在 git 里）
 
@@ -446,11 +486,12 @@ async function enterAdmin() {
     CAN_WRITE = r.ok ? !!((await r.json()).permissions || {}).push : false;
   } catch { CAN_WRITE = false; }
   for (let i = 0; i < 100 && !MANIFEST; i++) await new Promise((r) => setTimeout(r, 100));
-  $("#adminMsg").hidden = CAN_WRITE;
+  $("#adminMsg").hidden = false;
   $("#adminMsg").textContent = CAN_WRITE
-    ? ""
-    : "⚠ 当前 Token 无仓库写权限：只能浏览文件列表。请换用勾选了 Contents 读写权限的 Token。";
-  document.querySelectorAll('.tab[data-tab="up"],.tab[data-tab="nf"],#fmNewFolder,#upRow').forEach((el) => (el.style.display = CAN_WRITE ? "" : "none"));
+    ? "✔ 管理员模式：可上传 / 替换 / 移动 / 删除 / 新建文件夹，单 commit 直接提交到仓库。"
+    : "📮 投稿模式：你的 Token 没有仓库写权限，可以在「⬆ 投稿」标签上传资料——系统会自动 Fork 本仓库到你的 GitHub 账号、提交并创建 PR，管理员合并后即上线（约 1 分钟建索引）。删除与文件夹管理仅限管理员。";
+  document.querySelector('.tab[data-tab="up"]').textContent = CAN_WRITE ? "⬆ 上传" : "⬆ 投稿";
+  document.querySelectorAll('.tab[data-tab="nf"],#fmNewFolder').forEach((el) => (el.style.display = CAN_WRITE ? "" : "none"));
   if (!MANIFEST) return log("索引未加载完成，请稍后刷新", "#fmLog");
   const subs = Object.keys(MANIFEST.subjects);
   $("#fmSubject").innerHTML = `<option value="">全部科目</option>` + subs.map((s) => `<option>${esc(s)}</option>`).join("");
@@ -700,7 +741,8 @@ function renderUpList() {
       <span class="fm-meta">${fmtSize(it.f.size)}</span>
       <button class="fm-op danger" data-i="${i}">✕</button></div>`;
   }).join("") || `<div class="empty" style="padding:14px 0">尚未选择文件</div>`;
-  $("#upBtn").textContent = upQueue.length ? `开始上传（${upQueue.length} 个文件）` : "开始上传";
+  const verb = CAN_WRITE ? "开始上传" : "开始投稿";
+  $("#upBtn").textContent = upQueue.length ? `${verb}（${upQueue.length} 个文件）` : verb;
 }
 $("#upSubject").onchange = renderUpList;
 $("#upSub").oninput = renderUpList;
@@ -719,10 +761,27 @@ $("#upBtn").onclick = async () => {
   const conflicts = changes.filter((c) => MANIFEST?.items?.some((x) => x.path === c.path));
   if (conflicts.length && !confirm(`以下 ${conflicts.length} 个文件已存在，将被覆盖：\n${conflicts.map((c) => c.path).join("\n")}`)) return;
   try {
-    log(`⬆ 打包上传 ${changes.length} 个文件（单 commit）…`, "#upLog");
     $("#upBtn").disabled = true;
-    await commitChanges(changes, `upload: ${changes.length} 个文件到 ${base}`);
-    log("✔ 上传成功，索引重建约 1 分钟后生效", "#upLog");
+    if (CAN_WRITE) {
+      log(`⬆ 打包上传 ${changes.length} 个文件（单 commit）…`, "#upLog");
+      await commitChanges(changes, `upload: ${changes.length} 个文件到 ${base}`);
+      log("✔ 上传成功，索引重建约 1 分钟后生效", "#upLog");
+    } else {
+      log(`⬆ 打包投稿 ${changes.length} 个文件（自动 Fork + PR）…`, "#upLog");
+      const dest = await ensureForkAndBranch("#upLog");
+      await commitChanges(changes, `投稿: ${changes.length} 个文件到 ${base}`, dest);
+      const files = changes.map((c) => `- ${c.path}`).join("\n");
+      const pr = await ghApi(`/repos/${REPO}/pulls`, {
+        method: "POST",
+        body: {
+          title: `投稿：${changes.length} 个文件到 ${base.replace(/\/$/, "")}`,
+          head: `${dest.owner}:${dest.branch}`,
+          base: "main",
+          body: `通过网站管理台投稿。\n\n## 文件清单\n${files}\n\n- [ ] 文件放进了正确的科目文件夹\n- [ ] 文件名无特殊字符\n- [ ] 遵守版权红线：只上传有权分享的学习资料`,
+        },
+      });
+      log(`✔ 投稿成功！已自动创建 PR：\n${pr.html_url}\n等管理员合并后即可在网站看到；合并前可在你的 Fork 同一分支继续 commit 补充，会自动并入这个 PR。`, "#upLog");
+    }
     upQueue = [];
     renderUpList();
   } catch (e) { log("✗ " + e.message, "#upLog"); }
