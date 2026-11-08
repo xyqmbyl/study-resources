@@ -423,6 +423,39 @@ $("#results").addEventListener("click", (e) => {
   scrollToResults();
 });
 
+// 下载拦截：download 属性对跨域链接无效（浏览器会直接打开预览页），
+// 改为 fetch 成 blob 再落盘，文件名取自资料本身；失败时兜底开原链接
+$("#results").addEventListener("click", async (e) => {
+  const a = e.target.closest("a[data-dl]");
+  if (!a) return;
+  e.preventDefault();
+  if (a.dataset.busy) return;
+  a.dataset.busy = "1";
+  const url = a.href;
+  const name = a.dataset.name || decodeURIComponent((url.split("/").pop() || "").split("?")[0]) || "download";
+  const orig = a.textContent;
+  a.textContent = "下载中…";
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const tmp = document.createElement("a");
+    tmp.href = objUrl;
+    tmp.download = name;
+    document.body.appendChild(tmp);
+    tmp.click();
+    tmp.remove();
+    setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+    a.textContent = orig;
+  } catch (err) {
+    a.textContent = orig;
+    window.open(url, "_blank", "noopener");
+  } finally {
+    delete a.dataset.busy;
+  }
+});
+
 function cardHTML(it) {
   if (it.type === "link") return videoCard(it);
   if (it.type === "book") return bookCard(it);
@@ -434,6 +467,10 @@ function fileCard(it) {
   const dl = u.dl || u.jsd || u.proxy || u.raw || "#";
   const read = it.ext === "pdf" && (u.jsd || u.raw)
     ? `<a class="btn-read" href="${esc(u.jsd || u.raw)}" target="_blank" rel="noopener">在线阅读</a>` : "";
+  // Release 通道链接自带附件头可直接下；jsd/proxy/raw 是跨域的，download 属性无效，交给统一的 blob 下载拦截
+  const dlCh = u.dl && !u.raw;
+  const dlAttrs = dlCh ? `target="_blank" rel="noopener"` : `download data-dl="1" data-name="${esc(it.name || "file")}"`;
+  const altAttrs = dlCh ? `download` : `download data-dl="1" data-name="${esc(it.name || "file")}"`;
   return `<div class="card">
     <div class="card-top">
       <span class="ftag ${extColor(it.ext)}">${esc((it.ext || "?").toUpperCase().slice(0, 4))}</span>
@@ -441,9 +478,9 @@ function fileCard(it) {
     </div>
     <div class="card-meta"><span>${esc(it.folder || it.subject)}</span><span>${fmtSize(it.size || 0)}</span><span>${esc(it.updated || "")}</span></div>
     <div class="card-actions">
-      <a class="btn-dl" href="${esc(dl)}" download>⬇ 下载</a>
+      <a class="btn-dl" href="${esc(dl)}" ${dlAttrs}>⬇ 下载</a>
       ${read}
-      <a class="btn-alt" href="${esc(u.proxy || u.raw || dl)}" download title="备用线路">备</a>
+      <a class="btn-alt" href="${esc(u.proxy || u.raw || dl)}" ${altAttrs} title="备用线路">备</a>
     </div></div>`;
 }
 
