@@ -461,7 +461,22 @@ $("#results").addEventListener("click", async (e) => {
   a.dataset.busy = "1";
   const name = a.dataset.name || decodeURIComponent(((a.href || "").split("/").pop() || "").split("?")[0]) || "download";
   const orig = a.textContent;
-  a.textContent = "下载中…";
+  // 迷你进度显示：直接画在按钮上（文字 + 底色填充），不占卡片额外空间
+  const fmtMB = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(b / 1024)) + "KB";
+  const fmtSpd = (s) => s >= 1048576 ? (s / 1048576).toFixed(1) + "MB/s" : Math.max(1, Math.round(s / 1024)) + "KB/s";
+  const paint = (got, total, bps) => {
+    a.style.fontSize = "11.5px";
+    a.style.whiteSpace = "nowrap";
+    a.style.overflow = "hidden";
+    if (total) {
+      const pct = Math.min(100, Math.round((got / total) * 100));
+      a.textContent = `${pct}% ${fmtSpd(bps)}`;
+      a.style.backgroundImage = `linear-gradient(90deg, rgba(0,0,0,.22) ${pct}%, rgba(255,255,255,.18) ${pct}%)`;
+    } else {
+      a.textContent = `${fmtMB(got)} ${fmtSpd(bps)}`;
+    }
+  };
+  const resetPaint = () => { a.textContent = orig; a.style.backgroundImage = ""; a.style.fontSize = ""; a.style.whiteSpace = ""; };
   const saveBlob = (blob) => {
     const objUrl = URL.createObjectURL(blob);
     const tmp = document.createElement("a");
@@ -476,16 +491,32 @@ $("#results").addEventListener("click", async (e) => {
   let candidates = [a.href];
   try { for (const x of JSON.parse(a.dataset.alts || "[]")) if (x && !candidates.includes(x)) candidates.push(x); } catch (err2) {}
   let ok = false;
+  a.textContent = "连接中…";
   for (const u2 of candidates) {
     try {
       const resp = await fetch(u2);
       if (!resp.ok) throw new Error("HTTP " + resp.status);
-      saveBlob(await resp.blob());
+      // 流式读取以显示进度；无流接口时退回整块 blob
+      const total = +resp.headers.get("content-length") || 0;
+      if (resp.body && resp.body.getReader) {
+        const reader = resp.body.getReader();
+        const chunks = []; let got = 0; const t0 = performance.now(); let lastPaint = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value); got += value.length;
+          const now = performance.now();
+          if (now - lastPaint > 150) { lastPaint = now; paint(got, total, got / Math.max(0.05, (now - t0) / 1000)); }
+        }
+        saveBlob(new Blob(chunks));
+      } else {
+        saveBlob(await resp.blob());
+      }
       ok = true;
       break;
     } catch (err) { /* 换下一条线路 */ }
   }
-  a.textContent = orig;
+  resetPaint();
   if (!ok) window.open(candidates[0], "_blank", "noopener");
   delete a.dataset.busy;
 });
