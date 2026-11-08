@@ -5,7 +5,7 @@
 - 大文件(在 .gitignore 中、走 Releases): url 写入 urls，来源 release-assets.json
 - 链接条目: 合并 site/_data/*.json (type: link / book)
 """
-import json, hashlib, os, sys
+import json, hashlib, os, re, sys
 from pathlib import Path, PurePosixPath
 from datetime import datetime, timezone, timedelta
 
@@ -152,6 +152,12 @@ def main():
     out = SITE / "manifest.json"
     out.write_text(json.dumps(manifest, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     print(f"manifest.json: {len(files)} items, {len(subjects)} subjects, {out.stat().st_size//1024} KB")
+
+    # 给 index.html 的静态资源打版本号（浏览器缓存破坏），每次构建都换新版本号
+    tag = manifest["generated"].replace("-", "").replace(" ", "-").replace(":", "")
+    html = (SITE / "index.html").read_text(encoding="utf-8")
+    html = re.sub(r"assets/(app\.js|style\.css)(\?v=[\w-]+)?", rf"assets/\1?v={tag}", html)
+    (SITE / "index.html").write_text(html, encoding="utf-8")
 
 if __name__ == "__main__":
     main()
