@@ -725,15 +725,18 @@ window.openPreview = (embed, view, title) => {
   document.body.style.overflow = "hidden";
 };
 
-/* ---------- pdf.js 兜底（Safari/WebKit 无 iframe 内嵌渲染 PDF 的能力） ---------- */
+/* ---------- pdf.js 兜底（Safari/WebKit 与所有移动端内核无法 iframe 内嵌渲染 PDF） ---------- */
 // macOS Safari 与所有 iOS 浏览器（含微信 iOS 端，内核全部是 WebKit）里 <iframe> 内嵌 PDF
-// 只会白屏或触发下载，改用 pdf.js 把 PDF 画到 canvas；Chromium/Firefox 仍走浏览器原生查看器。
+// 只会白屏或触发下载；Android 的 Chrome/WebView/微信等各内核同样不能在 iframe 里渲染
+// PDF，点预览会直接变成下载。这些环境统一改用 pdf.js 把 PDF 画到 canvas；
+// 桌面 Chromium/Firefox 仍走浏览器原生查看器。
 // URL 加 ?pdfjs=1 或 #pdfjs=1 可在任意浏览器强制走此路径测试。
 const PDFJS_PATH = (() => {
   const ua = navigator.userAgent;
   const isIOS = /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); // iPadOS 伪装桌面 UA
   const isSafari = /Safari/.test(ua) && !/Chrom(e|ium)|Edg|OPR|Firefox|CriOS|FxiOS/.test(ua);
-  return isIOS || isSafari || /pdfjs=1/.test(location.search + location.hash);
+  const isMobile = /Android|Mobile|Silk\//.test(ua) || navigator.userAgentData?.mobile === true; // 安卓各内核（含微信）及移动端 UA
+  return isIOS || isSafari || isMobile || /pdfjs=1/.test(location.search + location.hash);
 })();
 // 按需加载自托管的 pdf.js（Chromium 用户永远不会触发），加载过就复用
 let _pdfjsLibPromise = "";
