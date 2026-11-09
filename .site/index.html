@@ -5,12 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>中南大学资源共享库</title>
 <meta name="description" content="中南大学资源共享库：真题、笔记、PPT、电子书与视频课程一站式检索下载">
-<link rel="stylesheet" href="assets/style.css?v=20261108-2100">
+<link rel="stylesheet" href="assets/style.css?v=20261109-0911">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
 </head>
 <body>
+<a class="skip-link" href="#app">跳到主要内容</a>
+<noscript><div class="noscript-tip">⚠️ 本站的搜索、预览需要启用 JavaScript。所有资料也可以直接到 <a href="https://github.com/xyqmbyl/study-resources" target="_blank" rel="noopener">GitHub 仓库</a> 浏览下载。</div></noscript>
 <div id="wallpaper" aria-hidden="true"></div>
 <header class="topbar">
+  <button id="menuBtn" class="menu-btn" aria-label="打开目录菜单" aria-expanded="false" aria-controls="sidebar">☰</button>
   <a class="brand" href="#">📚 中南大学资源共享库</a>
   <div class="topbar-right">
     <button id="btnTheme" class="icon-btn" title="切换深浅色">🌙</button>
@@ -21,25 +24,36 @@
   </div>
 </header>
 
-<main id="app">
+<main id="app" tabindex="-1">
   <!-- 首页 -->
   <section id="viewHome">
     <div class="hero">
+      <h1 id="heroTitle" class="hero-title">📚 中南大学资源共享库</h1>
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
-        <input id="searchInput" type="search" placeholder="搜文件名 / 科目 / 关键词" autocomplete="off">
+        <input id="searchInput" type="search" placeholder="搜文件名 / 科目 / 关键词" autocomplete="off" aria-label="搜索资源">
         <kbd class="search-kbd">Ctrl K</kbd>
-        <button id="searchClear" class="search-clear" hidden>✕</button>
+        <button id="searchClear" class="search-clear" hidden aria-label="清空搜索">✕</button>
       </div>
       <div class="hero-meta" id="heroMeta"></div>
     </div>
 
-    <div class="chips" id="typeChips"></div>
+    <div class="chips" id="typeChips" role="group" aria-label="按类型筛选"></div>
     <div class="layout">
-      <aside class="sidebar" id="sidebar"></aside>
+      <div class="drawer-mask" id="drawerMask" aria-hidden="true"></div>
+      <aside class="sidebar" id="sidebar" aria-label="资料目录"></aside>
       <div class="splitter" title="拖动调整目录与内容宽度"></div>
       <section class="content">
-        <div id="results"></div>
+        <div id="results" aria-live="polite">
+          <div class="skeleton" aria-hidden="true">
+            <div class="sk-card"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
+            <div class="sk-card"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
+            <div class="sk-card"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
+            <div class="sk-card"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
+            <div class="sk-card"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
+            <div class="sk-card"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
+          </div>
+        </div>
       </section>
     </div>
   </section>
@@ -175,11 +189,14 @@
   </div>
 </div>
 
+<button id="backTop" class="back-top" aria-label="回到顶部" title="回到顶部">↑</button>
+
 <footer class="footer">
-  <p>同学共建 · 自取自用 · 欢迎补充 <a href="https://github.com/xyqmbyl/study-resources" target="_blank">GitHub</a></p>
+  <p>同学共建 · 自取自用 · 欢迎补充 <a href="https://github.com/xyqmbyl/study-resources" target="_blank" rel="noopener">GitHub</a> · <a href="https://github.com/xyqmbyl/study-resources/issues/new/choose" target="_blank" rel="noopener">反馈 / 求资源</a></p>
+  <p class="footer-sub" id="ftGen">数据与 GitHub 仓库实时同步</p>
 </footer>
 
-<script src="assets/fuse.min.js"></script>
-<script src="assets/app.js?v=20261108-2100"></script>
+<script src="assets/fuse.min.js?v=20261109-0911"></script>
+<script src="assets/app.js?v=20261109-0911"></script>
 </body>
 </html>

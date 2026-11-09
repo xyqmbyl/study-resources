@@ -128,7 +128,7 @@ async function loadManifest() {
   try {
     MANIFEST = await (await fetch("manifest.json", { cache: "no-cache" })).json();
   } catch (e) {
-    document.getElementById("results").innerHTML = `<p class="empty">索引加载失败（本地预览请先运行 .scripts/build_manifest.py）</p>`;
+    document.getElementById("results").innerHTML = `<p class="empty">😵 资源库索引加载失败，可能是网络问题。<br><small>试试 <a href="javascript:location.reload()">刷新页面</a>；若持续失败，可到 <a href="https://github.com/xyqmbyl/study-resources" target="_blank" rel="noopener">GitHub 仓库</a> 直接浏览下载资料。</small></p>`;
     return;
   }
   MANIFEST.items.forEach((it) => (it._s = [it.name, it.title, it.subject, it.folder, it.note, it.author, it.py, ...(it.tags || [])].filter(Boolean).join(" ")));
@@ -139,7 +139,8 @@ async function loadManifest() {
   const nFile = MANIFEST.items.filter((x) => x.type === "file").length;
   const nLink = MANIFEST.items.filter((x) => x.type === "link").length;
   const nBook = MANIFEST.items.filter((x) => x.type === "book").length;
-  $("#heroMeta").innerHTML = `<b>${subs}</b> 个科目 · <b>${nFile}</b> 份资料 · <b>${nLink}</b> 门视频 · <b>${nBook}</b> 本电子书&ensp;更新于 ${esc(MANIFEST.generated)}`;
+  $("#heroMeta").innerHTML = `<b>${subs}</b> 个科目 · <b>${nFile}</b> 份资料 · <b>${nLink}</b> 门视频 · <b>${nBook}</b> 本电子书`;
+  $("#ftGen").textContent = `索引更新于 ${esc(MANIFEST.generated)} · 数据与 GitHub 仓库实时同步`;
   $("#folderList").innerHTML = [...new Set(MANIFEST.items.filter((x) => x.folder).map((x) => x.subject + "/" + x.folder))]
     .map((f) => `<option value="${esc(f)}">`).join("");
   renderChips(); renderSidebar(); render();
@@ -151,7 +152,7 @@ function renderChips() {
   MANIFEST.items.forEach((x) => counts[x.type] !== undefined && counts[x.type]++);
   $("#typeChips").innerHTML = Object.keys(typeNames)
     .map((t) => `<button class="chip ${state.type === t ? "active" : ""}" data-t="${t}">${typeNames[t]} <span>${counts[t]}</span></button>`).join("");
-  document.querySelectorAll("#typeChips .chip").forEach((b) => (b.onclick = () => { state.type = b.dataset.t; renderChips(); render(); }));
+  document.querySelectorAll("#typeChips .chip").forEach((b) => (b.onclick = () => { state.type = b.dataset.t; renderChips(); render(); syncHash(true); }));
 }
 
 /* ---------- 导航自定义（只存本浏览器：顺序 + 隐藏顶级科目） ---------- */
@@ -209,7 +210,7 @@ function renderSidebar() {
       const open = state.open.has(p);
       const meta = MANIFEST.subjects[p];
       rows.push(
-        `<div class="subj-item tree ${state.folder === p ? "active" : ""}" data-p="${esc(p)}" style="padding-left:${12 + depth * 15}px">` +
+        `<div class="subj-item tree ${state.folder === p ? "active" : ""}" data-p="${esc(p)}" tabindex="0" role="button" style="padding-left:${12 + depth * 15}px">` +
         `<span class="tw ${child.ch.size ? "" : "leaf"} ${open ? "open" : ""}" data-tw="${esc(p)}">▶</span>` +
         `<span>${esc((meta && meta.icon) || (child.ch.size ? "📂" : "📁"))} ${esc(name)}</span>` +
         `<span class="cnt">${child.n}</span></div>`);
@@ -218,7 +219,7 @@ function renderSidebar() {
   };
   walk(TREE, "", 0);
   $("#sidebar").innerHTML =
-    `<div class="subj-item ${state.folder === "" ? "active" : ""}" data-p=""><span>🏷️ 全部</span><span class="cnt">${MANIFEST.items.length}</span></div>` +
+    `<div class="subj-item ${state.folder === "" ? "active" : ""}" data-p="" tabindex="0" role="button"><span>🏷️ 全部</span><span class="cnt">${MANIFEST.items.length}</span></div>` +
     rows.join("");
 }
 
@@ -240,7 +241,18 @@ $("#sidebar").addEventListener("click", (e) => {
   state.folder = p;
   renderSidebar();
   render();
+  syncHash(true);
   scrollToResults();
+  closeDrawer(); // 移动端抽屉：选中目录后自动收起
+});
+
+// 键盘可达：目录行可聚焦，Enter/Space 等效点击
+$("#sidebar").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const row = e.target.closest("[data-p]");
+  if (!row) return;
+  e.preventDefault();
+  row.click();
 });
 
 /* ---------- 导航自定义弹窗 ---------- */
@@ -385,7 +397,10 @@ function scrollToResults() {
 }
 
 /* ---------- 搜索：中文长词按 2 字拆分匹配 + 常用别名，无命中时 Fuse 兜底 ---------- */
-const SEARCH_ALIAS = { "高数": "高等数学", "线代": "线性代数", "计网": "计算机网络", "计组": "计算机组成原理", "大物": "大学物理", "毛概": "毛泽东思想概论" };
+// 常用缩写别名，双向展开（短词↔全称互为「或」备选）；只收录仓库里真实存在的科目
+const SEARCH_ALIAS_PAIRS = [["高数", "高等数学"], ["线代", "线性代数"], ["计网", "计算机网络"], ["计组", "计算机组成原理"]];
+const SEARCH_ALIAS = {};
+for (const [a, b] of SEARCH_ALIAS_PAIRS) { (SEARCH_ALIAS[a] ??= []).push(b); (SEARCH_ALIAS[b] ??= []).push(a); }
 const gramsOf = (t) => /^[a-z0-9]+$/.test(t) ? [t] : Array.from({ length: Math.ceil(t.length / 2) }, (_, i) => t.slice(i * 2, i * 2 + 2));
 function smartSearch(q) {
   q = q.toLowerCase().trim();
@@ -393,7 +408,7 @@ function smartSearch(q) {
   const alts = toks.map((t) => {
     const base = gramsOf(t);
     const a = SEARCH_ALIAS[t];
-    return a ? [base, gramsOf(a.toLowerCase())] : [base]; // 别名是「或」的备选，不是追加
+    return a ? [base, ...a.map((x) => gramsOf(x.toLowerCase()))] : [base]; // 别名是「或」的备选，不是追加
   });
   const hit = MANIFEST.items.filter((it) => {
     const s = (it._s || "").toLowerCase();
@@ -409,7 +424,15 @@ function smartSearch(q) {
   return hit.sort((a, b) => score(b) - score(a));
 }
 
+// 首屏只渲染前 RENDER_LIMIT 张卡（1 千+ 卡一次性 innerHTML 明显卡顿、拖慢 FCP），
+// 预算用完挂「加载更多」哨兵，滚动到附近自动续载；筛选条件变化时重置预算
+let RENDER_LIMIT = 90, _lastFilter = "";
+const _moreIO = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) renderMore(); }, { rootMargin: "600px" });
+function renderMore() { RENDER_LIMIT += 150; render(); }
+
 function render() {
+  const sig = state.q + "|" + state.folder + "|" + state.type;
+  if (sig !== _lastFilter) { _lastFilter = sig; RENDER_LIMIT = 90; }
   let items = MANIFEST.items;
   if (state.q) items = smartSearch(state.q); // 先搜索，再让目录/类型筛选继续生效
   items = items.filter((x) => !navHiddenTop(x)); // 隐藏科目的资料在「全部」里也不出现（搜索除外则保留——此处统一隐藏）
@@ -417,7 +440,9 @@ function render() {
   if (state.type !== "all") items = items.filter((x) => x.type === state.type);
   const box = document.getElementById("results");
   if (!items.length) {
-    box.innerHTML = `<p class="empty">${state.q ? "🔍 没找到「" + esc(state.q) + "」，换个关键词试试？" : "（空）"}</p>`;
+    box.innerHTML = `<p class="empty">${state.q
+      ? `🔍 没找到与「${esc(state.q)}」匹配的资源<br><small>试试更短的关键词，或点上方「全部」去掉类型筛选</small>`
+      : "（空）此目录暂无资料，欢迎到管理台投稿补充"}</p>`;
     return;
   }
   // 分组：选中目录时按下一级子文件夹分（本层文件排最前），否则按顶级科目
@@ -440,13 +465,26 @@ function render() {
       state.folder.split("/").map((s, i, a) => `<a data-c="${esc(a.slice(0, i + 1).join("/"))}">${esc(s)}</a>`).join(" <i>/</i> ") +
       `</div>`
     : "";
+  // 分批渲染：预算内逐组截断，剩余项挂哨兵按钮（滚动接近时自动续载，也可手动点）
+  let used = 0, truncated = 0;
+  const parts = [];
+  for (const sub of keys) {
+    let slice = groups[sub];
+    if (used + slice.length > RENDER_LIMIT) slice = slice.slice(0, Math.max(0, RENDER_LIMIT - used));
+    used += slice.length;
+    const m = MANIFEST.subjects[sub] || {};
+    const isTop = !state.folder;
+    parts.push(`<h2 class="group-title">${isTop ? (m.icon || "📁") : "📁"} ${esc(sub)} <small>${groups[sub].length}</small></h2><div class="grid">${slice.map(cardHTML).join("")}</div>`);
+    if (slice.length < groups[sub].length) { truncated = items.length - used; break; }
+  }
+  const more = truncated > 0
+    ? `<div class="load-more" id="moreSentinel"><button class="btn" id="moreBtn">加载更多（还有 ${truncated} 项）</button></div>` : "";
   box.innerHTML =
-    (state.q ? `<p class="search-stat">「${esc(state.q)}」命中 ${items.length} 项</p>` : "") + crumb +
-    keys.map((sub) => {
-      const m = MANIFEST.subjects[sub] || {};
-      const isTop = !state.folder;
-      return `<h2 class="group-title">${isTop ? (m.icon || "📁") : "📁"} ${esc(sub)} <small>${groups[sub].length}</small></h2><div class="grid">${groups[sub].map(cardHTML).join("")}</div>`;
-    }).join("");
+    (state.q ? `<p class="search-stat">「${esc(state.q)}」命中 ${items.length} 项</p>` : "") + crumb + parts.join("") + more;
+  if (truncated > 0) {
+    $("#moreBtn").onclick = renderMore;
+    _moreIO.observe($("#moreSentinel"));
+  }
 }
 
 // 面包屑点击 → 跳到对应层级
@@ -456,7 +494,9 @@ $("#results").addEventListener("click", (e) => {
   state.folder = a.dataset.c;
   renderSidebar();
   render();
+  syncHash(true);
   scrollToResults();
+  closeDrawer();
 });
 
 // 下载拦截：download 属性对跨域链接无效（浏览器会直接打开预览页），
@@ -501,9 +541,9 @@ $("#results").addEventListener("click", async (e) => {
     tmp.remove();
     setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
   };
-  // 级联线路：主链接 → data-alts 里的备用线路，全失败才开新页面
+  // 级联线路：主链接 → 卡片级 data-alts 里的备用线路，全失败才开新页面
   let candidates = [a.href];
-  try { for (const x of JSON.parse(a.dataset.alts || "[]")) if (x && !candidates.includes(x)) candidates.push(x); } catch (err2) {}
+  try { for (const x of JSON.parse((a.closest(".card") || a).dataset.alts || "[]")) if (x && !candidates.includes(x)) candidates.push(x); } catch (err2) {}
   let ok = false, cancelled = false;
   a.style.fontSize = "11.5px"; a.style.whiteSpace = "nowrap"; a.style.overflow = "hidden";
   a.innerHTML = `<span class="dl-t">连接中…</span><span class="dl-x" title="取消下载">✕</span>`;
@@ -586,16 +626,19 @@ function fileCard(it) {
     ? `<a class="btn-read" href="javascript:void(0)" data-preview="1"${ou ? ` data-embed="${esc(ou.embed)}" data-view="${esc(ou.view)}"` : ` data-blob="${esc(blobAlts)}" data-mime="${esc(previewMime(it.ext))}" data-fname="${esc(fname)}"`} data-title="${esc(it.name || "")}">在线预览</a>` : "";
   // Release 通道链接自带附件头可直接下；jsd/proxy/raw 是跨域的，download 属性无效，交给统一 blob 下载（级联线路）
   const dlCh = u.dl && !u.raw;
-  // 级联顺序：gcore（jsDelivr 备用域，cdn 被限流/污染时通常可达且快）→ ghfast 代理 → ghproxy.net 代理 → raw
+  // 备用线路只随卡片写一次（此前下载/备用按钮各内联一份 data-alts，占首屏 HTML 近一半体积），
+  // 下载时统一从卡片级 data-alts 读取
   const alts = JSON.stringify([u.jsd2, u.proxy, u.proxy2, u.raw].filter(Boolean));
-  const dlAttrs = dlCh ? `target="_blank" rel="noopener"` : `download data-dl="1" data-name="${esc(fname)}" data-alts='${esc(alts)}'`;
-  const altAttrs = dlCh ? `download` : `download data-dl="1" data-name="${esc(fname)}" data-alts='${esc(alts)}'`;
-  return `<div class="card">
+  const dlAttrs = dlCh ? `target="_blank" rel="noopener"` : `download data-dl="1" data-name="${esc(fname)}"`;
+  const altAttrs = dlCh ? `download` : `download data-dl="1" data-name="${esc(fname)}"`;
+  const big = (it.size || 0) > 20971520; // >20MB 无 jsDelivr 线路，走代理/Release 通道，速度慢属正常
+  return `<div class="card" data-alts='${esc(alts)}'>
     <div class="card-top">
       <span class="ftag ${extColor(it.ext)}">${esc((it.ext || "?").toUpperCase().slice(0, 4))}</span>
       <div class="card-title">${hl(it.name)}</div>
     </div>
-    <div class="card-meta"><span>${esc(it.folder || it.subject)}</span><span>${fmtSize(it.size || 0)}</span><span>${esc(it.updated || "")}</span></div>
+    ${it.note ? `<div class="card-note">${hl(it.note)}</div>` : ""}
+    <div class="card-meta"><span>${esc(it.folder || it.subject)}</span><span${big ? ` class="ft-big" title="大文件，经备用线路下载，耗时长属正常现象"` : ""}>${big ? "⚠ " : ""}${fmtSize(it.size || 0)}</span><span>${esc(it.updated || "")}</span></div>
     <div class="card-actions">
       <a class="btn-dl" href="${esc(dl)}" ${dlAttrs}>⬇ 下载</a>
       ${read}
@@ -726,13 +769,62 @@ document.addEventListener("click", (e) => {
   else openPreview(a.dataset.embed, a.dataset.view, a.dataset.title);
 });
 
-/* ---------- 路由 ---------- */
+/* ---------- 路由：#admin 管理台；#q=..&folder=..&type=.. 深链（可分享/收藏/前进后退） ---------- */
 function route() {
   const admin = location.hash === "#admin";
   $("#viewHome").hidden = admin;
   $("#viewAdmin").hidden = !admin;
-  if (admin && TOKEN()) enterAdmin();
+  if (admin) { if (TOKEN()) enterAdmin(); return; }
+  // 回主页/前进/后退：按当前 hash 恢复视图（空 hash = 清空搜索与目录筛选）
+  if (MANIFEST) applyHashState();
 }
+function applyHashToState() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  state.q = p.get("q") || "";
+  $("#searchInput").value = state.q;
+  const t = p.get("type");
+  if (t && typeNames[t]) state.type = t;
+  state.folder = p.get("folder") || "";
+  if (state.folder) { // 深链指向子目录时展开目录树对应层级
+    const segs = state.folder.split("/");
+    for (let i = 1; i <= segs.length; i++) state.open.add(segs.slice(0, i).join("/"));
+  }
+}
+function applyHashState() { applyHashToState(); renderChips(); renderSidebar(); render(); }
+// 把当前筛选写进 URL：离散操作（点目录/切类型）pushState 可后退，连续输入（打字）replaceState 不刷历史
+function syncHash(push) {
+  const p = new URLSearchParams();
+  if (state.q) p.set("q", state.q);
+  if (state.folder) p.set("folder", state.folder);
+  if (state.type !== "all") p.set("type", state.type);
+  const s = p.toString();
+  history[push ? "pushState" : "replaceState"](null, "", location.pathname + location.search + (s ? "#" + s : ""));
+}
+
+/* ---------- 移动端抽屉 / 回到顶部 / 搜索清除 ---------- */
+function closeDrawer() {
+  $("#sidebar").classList.remove("open");
+  $("#drawerMask").classList.remove("show");
+  $("#menuBtn").setAttribute("aria-expanded", "false");
+}
+$("#menuBtn").onclick = () => {
+  const open = !$("#sidebar").classList.contains("open");
+  $("#sidebar").classList.toggle("open", open);
+  $("#drawerMask").classList.toggle("show", open);
+  $("#menuBtn").setAttribute("aria-expanded", String(open));
+};
+$("#drawerMask").onclick = closeDrawer;
+
+const backTop = $("#backTop");
+addEventListener("scroll", () => backTop.classList.toggle("show", scrollY > 600), { passive: true });
+backTop.onclick = () => scrollTo({ top: 0, behavior: "smooth" });
+
+$("#searchInput").addEventListener("input", (e) => ($("#searchClear").hidden = !e.target.value));
+$("#searchClear").onclick = () => {
+  $("#searchInput").value = ""; state.q = "";
+  $("#searchClear").hidden = true; syncHash(false); render();
+  $("#searchInput").focus();
+};
 
 /* ---------- 管理台 ---------- */
 const TOKEN = () => localStorage.getItem("admin_token");
@@ -1678,16 +1770,22 @@ function saveUI() {
 window.addEventListener("beforeunload", saveUI);
 
 /* ---------- 启动 ---------- */
-// 恢复上次界面状态（正文：搜索词/类型筛选/目录树选中与展开；管理台在 enterAdmin 里恢复）
-if (typeNames[UISAVE.type]) state.type = UISAVE.type;
-if (typeof UISAVE.folder === "string") state.folder = UISAVE.folder;
-if (Array.isArray(UISAVE.open) && UISAVE.open.length) state.open = new Set(UISAVE.open);
-if (UISAVE.q) { state.q = UISAVE.q; $("#searchInput").value = UISAVE.q; }
+// URL 深链优先（分享/收藏直达），否则恢复上次界面状态（sessionStorage，本标签页内刷新不丢位置）
+const _hasDeep = location.hash.length > 1 && location.hash !== "#admin";
+if (_hasDeep) {
+  applyHashToState();
+} else {
+  // 恢复上次界面状态（正文：搜索词/类型筛选/目录树选中与展开；管理台在 enterAdmin 里恢复）
+  if (typeNames[UISAVE.type]) state.type = UISAVE.type;
+  if (typeof UISAVE.folder === "string") state.folder = UISAVE.folder;
+  if (Array.isArray(UISAVE.open) && UISAVE.open.length) state.open = new Set(UISAVE.open);
+  if (UISAVE.q) { state.q = UISAVE.q; $("#searchInput").value = UISAVE.q; }
+}
 window.addEventListener("hashchange", route);
 window.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
     e.preventDefault();
-    if (location.hash) location.hash = "";
+    if (location.hash === "#admin") location.hash = ""; // 从管理台回首页（在首页不动 hash，避免清掉已选目录）
     $("#searchInput").focus();
   }
   if (e.key === "Escape") {
@@ -1698,7 +1796,7 @@ window.addEventListener("keydown", (e) => {
 let _deb;
 $("#searchInput").addEventListener("input", (e) => {
   clearTimeout(_deb);
-  _deb = setTimeout(() => { state.q = e.target.value.trim(); render(); }, 120);
+  _deb = setTimeout(() => { state.q = e.target.value.trim(); syncHash(false); render(); }, 120);
 });
 
 initTheme();
