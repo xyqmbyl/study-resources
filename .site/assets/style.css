@@ -262,8 +262,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
   .splitter { display: none; }
   .search-kbd { display: none; }
   .menu-btn { display: inline-flex; }
-  /* 抽屉：fixed 左侧、默认滑出屏幕外 */
-  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: min(78vw, 320px); max-height: none;
+  /* 抽屉：fixed 左侧、默认滑出屏幕外。
+     必须显式 height：基础规则的 align-self:start 会让 Chromium 不做 top/bottom 拉伸，
+     抽屉被撑成内容高 → overflow 无溢出 → 手指怎么滑都滚不动（实测小米/Edge 复现） */
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: min(78vw, 320px);
+    height: 100vh; height: 100dvh; max-height: none;
     z-index: 90; background: var(--bg); border-right: 1px solid var(--line); padding: 14px 12px;
     overflow-y: auto; overscroll-behavior: contain; box-shadow: 12px 0 40px rgba(0,0,0,.22);
     transform: translateX(-100%); visibility: hidden; transition: transform .28s ease, visibility .28s; }

@@ -1827,7 +1827,8 @@ if (location.search.includes("debug=touch")) {
     const s = document.getElementById("sidebar");
     if (!s) return "-";
     const open = s.classList.contains("open") ? "开" : "关";
-    return `抽屉=${open} 抽屉内滚=${Math.round(s.scrollTop)}/${Math.max(0, s.scrollHeight - s.clientHeight)}px`;
+    const h = Math.round(s.getBoundingClientRect().height);
+    return `抽屉=${open} 高=${h}px(视口${innerHeight}) 抽屉内滚=${Math.round(s.scrollTop)}/${Math.max(0, s.scrollHeight - s.clientHeight)}px`;
   };
   const upd = () => {
     dbg.textContent =
