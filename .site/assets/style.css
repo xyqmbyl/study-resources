@@ -39,7 +39,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 
 /* 顶栏 */
 .topbar { position: sticky; top: 0; z-index: 50; display: flex; justify-content: space-between; align-items: center;
-  padding: 12px 28px; backdrop-filter: blur(12px); background: color-mix(in srgb, var(--bg) 82%, transparent);
+  padding: 12px 28px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); background: color-mix(in srgb, var(--bg) 82%, transparent);
   border-bottom: 1px solid var(--line); }
 .brand { font-family: var(--serif); font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; letter-spacing: .5px; }
 .topbar-right { display: flex; gap: 10px; align-items: center; }
@@ -123,6 +123,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 15px 16px;
   display: flex; flex-direction: column; gap: 8px; transition: transform .18s, box-shadow .2s; position: relative; }
 .card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,.1); }
+/* 触屏设备无 hover：避免点按后卡片悬停位移残留（sticky hover），也减少滚动中反复触发的 transform 合成 */
+@media (hover: none) { .card:hover { transform: none; } }
 .card-top { display: flex; gap: 10px; align-items: flex-start; }
 .ftag { flex: none; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center;
   font-size: 11px; font-weight: 800; color: #fff; letter-spacing: -.3px; }
@@ -264,6 +266,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
     overflow-y: auto; overscroll-behavior: contain; box-shadow: 12px 0 40px rgba(0,0,0,.22);
     transform: translateX(-100%); visibility: hidden; transition: transform .28s ease, visibility .28s; }
   .sidebar.open { transform: translateX(0); visibility: visible; }
+  /* 移动端滚动性能：去掉顶栏/回顶按钮的 backdrop 模糊（长列表在 iOS/低端安卓上的滚动卡顿主因），改不透明背景 */
+  .topbar { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg); }
+  .back-top { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--card); }
+  /* 长列表渲染性能：视口外卡片跳过渲染布局（首屏更快、滚动更顺） */
+  .card { content-visibility: auto; contain-intrinsic-size: auto 150px; }
   /* 栅格小屏断点 */
   .grid { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
   /* 触控目标 ≥44px（移动端强制） */

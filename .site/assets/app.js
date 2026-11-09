@@ -806,12 +806,15 @@ function closeDrawer() {
   $("#sidebar").classList.remove("open");
   $("#drawerMask").classList.remove("show");
   $("#menuBtn").setAttribute("aria-expanded", "false");
+  document.body.style.overflow = ""; // 解除抽屉打开时的背景滚动锁
 }
 $("#menuBtn").onclick = () => {
   const open = !$("#sidebar").classList.contains("open");
   $("#sidebar").classList.toggle("open", open);
   $("#drawerMask").classList.toggle("show", open);
   $("#menuBtn").setAttribute("aria-expanded", String(open));
+  if (open) document.body.style.overflow = "hidden"; // 锁背景滚动，防 iOS 滚动穿透
+  else document.body.style.overflow = "";
 };
 $("#drawerMask").onclick = closeDrawer;
 
@@ -1802,6 +1805,13 @@ $("#searchInput").addEventListener("input", (e) => {
 initTheme();
 loadCustomWp().then(applyWallpaper); // 先取本地自定义壁纸再应用，避免闪烁到空背景
 loadManifest().then(() => { // 索引渲染完再恢复正文滚动位置
-  if (location.hash !== "#admin" && UISAVE.y > 0) window.scrollTo(0, UISAVE.y);
+  if (location.hash !== "#admin" && UISAVE.y > 0) {
+    // 临时关掉全局平滑滚动：恢复位置要瞬时到位，否则刷新后页面会自己平滑滚一大段（手机上像在抢滚动）
+    const html = document.documentElement;
+    const prev = html.style.scrollBehavior;
+    html.style.scrollBehavior = "auto";
+    window.scrollTo(0, UISAVE.y);
+    html.style.scrollBehavior = prev;
+  }
 });
 route();
