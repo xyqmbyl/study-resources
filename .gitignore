@@ -18,6 +18,9 @@ Desktop.ini
 _PDF处理/
 __pycache__/
 
+# WPS 演示自动备份
+.wpp_backup/
+
 # 本地审计/工具残留（勿提交）
 audit_report.json
 .dsh-vision-router/
