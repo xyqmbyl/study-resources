@@ -1814,6 +1814,27 @@ $("#searchInput").addEventListener("input", (e) => {
 
 initTheme();
 loadCustomWp().then(applyWallpaper); // 先取本地自定义壁纸再应用，避免闪烁到空背景
+
+/* ---------- 触摸诊断模式（?debug=touch）：排查真机触摸滚动被哪一层拦截 ---------- */
+if (location.search.includes("debug=touch")) {
+  const dbg = document.createElement("div");
+  dbg.style.cssText = "position:fixed;top:60px;left:8px;right:8px;z-index:9999;background:rgba(0,0,0,.8);color:#0f0;font:12px/1.6 monospace;padding:6px 10px;border-radius:8px;pointer-events:none;white-space:pre-wrap;";
+  document.body.appendChild(dbg);
+  let st = 0, mv = 0, en = 0, cancelCnt = 0, last = "-", mvY = "-";
+  const upd = () => {
+    dbg.textContent =
+      `touchstart=${st} touchmove=${mv} touchend=${en} cancel=${cancelCnt}\n` +
+      `scrollY=${Math.round(scrollY)} / 可滚高度=${document.documentElement.scrollHeight - innerHeight}px\n` +
+      `last=${last} mvY=${mvY}`;
+  };
+  addEventListener("touchstart", (e) => { st++; last = "start y=" + (e.touches[0] ? Math.round(e.touches[0].clientY) : "?"); upd(); }, { passive: true });
+  addEventListener("touchmove", (e) => { mv++; mvY = "y=" + (e.touches[0] ? Math.round(e.touches[0].clientY) : "?"); if (mv % 5 === 0) upd(); }, { passive: true });
+  addEventListener("touchend", () => { en++; upd(); }, { passive: true });
+  addEventListener("touchcancel", () => { cancelCnt++; upd(); }, { passive: true });
+  addEventListener("scroll", upd, { passive: true });
+  upd();
+}
+
 loadManifest().then(() => { // 索引渲染完再恢复正文滚动位置
   if (location.hash !== "#admin" && UISAVE.y > 0) {
     // 临时关掉全局平滑滚动：恢复位置要瞬时到位，否则刷新后页面会自己平滑滚一大段（手机上像在抢滚动）
