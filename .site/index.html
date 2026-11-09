@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>中南大学资源共享库</title>
 <meta name="description" content="中南大学资源共享库：真题、笔记、PPT、电子书与视频课程一站式检索下载">
-<link rel="stylesheet" href="assets/style.css?v=20261109-2">
+<link rel="stylesheet" href="assets/style.css?v=20261109-3">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
 </head>
 <body>
@@ -36,6 +36,7 @@
         <button id="searchClear" class="search-clear" hidden aria-label="清空搜索">✕</button>
       </div>
       <div class="hero-meta" id="heroMeta"></div>
+      <button id="helpBtn" class="help-btn" type="button" onclick="document.getElementById('helpModal').hidden=false">📖 使用说明：怎么搜 / 预览 / 下载 / 投稿</button>
     </div>
 
     <div class="chips" id="typeChips" role="group" aria-label="按类型筛选"></div>
@@ -198,6 +199,44 @@
         <button id="pdfjsZoomIn" aria-label="放大" title="放大">＋</button>
       </div>
       <div id="pdfjsScroll"><div id="pdfjsPages"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 使用说明弹层 -->
+<div id="helpModal" class="modal" hidden>
+  <div class="modal-box help-box">
+    <button class="modal-close" onclick="document.getElementById('helpModal').hidden=true">✕</button>
+    <h3 class="help-title">📖 使用说明</h3>
+    <div class="help-grid">
+      <div class="help-card">
+        <h4>🔍 怎么搜</h4>
+        <p>点顶部搜索框（快捷键 <kbd>Ctrl K</kbd>）输入关键词，按文件名 / 科目 / 关键词全文检索。中文自动拆词，「高数」「线代」「电分」等缩写也能直达对应科目；没有精确命中时会自动模糊兜底。搜索框下方可按类型筛选：<b>文件 / 视频课程 / 电子书</b>。</p>
+      </div>
+      <div class="help-card">
+        <h4>🗂 怎么浏览</h4>
+        <p>左侧目录树按科目逐层点开浏览；顶部「☰ 自定义导航」可拖动调整科目顺序、取消勾选隐藏不关心的科目（设置只保存在你自己的浏览器里，随时可恢复默认）。</p>
+      </div>
+      <div class="help-card">
+        <h4>👁 怎么在线预览</h4>
+        <p>点资料卡的「在线预览」即可直接阅读：PDF / 图片 / 代码文本由浏览器原生渲染，Word / PPT 自动转换预览。Safari 与微信内置浏览器同样可用（自动走 pdf.js 兜底，支持翻页、缩放）。超过 20MB 的大 PDF 会先经代理下载到本地再打开，首次加载稍慢属正常。</p>
+      </div>
+      <div class="help-card">
+        <h4>⬇ 怎么下载</h4>
+        <p>点「下载」会自动选择当前最快的线路（jsDelivr CDN → GitHub → 加速代理，失败自动降级，无需手动选）；超过 100MB 的大文件自动指向 Releases 附件通道，速度慢请耐心等待。</p>
+      </div>
+      <div class="help-card">
+        <h4>🌙 个性化</h4>
+        <p>右上角 🌙 切换深浅色、🖼️ 换壁纸，偏好自动记住，下次访问保持不变。</p>
+      </div>
+      <div class="help-card">
+        <h4>📱 手机端</h4>
+        <p>左上角 ☰ 打开目录抽屉，点资料卡即可预览、点「下载」即可保存，体验与电脑端一致。</p>
+      </div>
+      <div class="help-card help-wide">
+        <h4>🤝 想投稿 / 没找到想要的资料？</h4>
+        <p>页脚「管理台」用 GitHub Token 登录即可上传投稿（自动 Fork + 提 PR，Token 获取教程内嵌在登录框里）；没有 GitHub 账号也没关系，直接 <a href="https://github.com/xyqmbyl/study-resources/issues/new/choose" target="_blank" rel="noopener">开 Issue 求资源 / 反馈</a> 就行。</p>
+      </div>
     </div>
   </div>
 </div>

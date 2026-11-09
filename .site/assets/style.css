@@ -424,3 +424,25 @@ a.fm-name:hover { color: var(--accent); }
 .pdfjs-page { position: relative; background: #fff; border-radius: 2px; overflow: hidden; }
 .pdfjs-page canvas { display: block; width: 100%; height: 100%; }
 
+
+/* ---------- 使用说明 ---------- */
+.help-btn { display: inline-flex; align-items: center; gap: 6px; margin: 16px auto 0; padding: 8px 18px;
+  font-size: 13px; cursor: pointer; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--card); color: var(--ink2); }
+.help-btn:hover { border-color: var(--accent); color: var(--accent2); }
+.help-box { width: min(720px, 94vw); padding: 16px 18px 20px; }
+.help-title { font-family: var(--serif); margin: 6px 8px 14px; font-size: 20px; }
+.help-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.help-card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--bg2); }
+.help-card h4 { margin: 0 0 8px; font-size: 14px; color: var(--accent2); }
+.help-card p { margin: 0; font-size: 13px; line-height: 1.75; color: var(--ink2); }
+.help-card b { color: var(--ink); }
+.help-card kbd { font-family: monospace; font-size: 12px; border: 1px solid var(--line);
+  border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; background: var(--bg); color: var(--ink); }
+.help-card a { color: var(--accent2); }
+.help-wide { grid-column: 1 / -1; }
+@media (max-width: 640px) {
+  .help-grid { grid-template-columns: 1fr; }
+  .help-btn { font-size: 12px; padding: 7px 14px; }
+}
+.help-box { overflow-x: hidden; }

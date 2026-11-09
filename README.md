@@ -47,7 +47,7 @@ GitHub 上还有几位学长收集的优质的中南资料库，与本项目**�
 
 ## ✨ 特性
 
-- 🔍 **在线检索**：[网站](https://xyqmbyl.github.io/study-resources/) 支持按文件名/科目/关键词搜索（中文自动拆词，「高数」「线代」等别名直达），按目录树浏览，点卡片**在线预览** PDF/PPT
+- 🔍 **在线检索**：[网站](https://xyqmbyl.github.io/study-resources/) 支持按文件名/科目/关键词搜索（中文自动拆词，「高数」「线代」等别名直达），按目录树浏览，点卡片**在线预览** PDF/PPT/图片/Word——macOS Safari、iOS 及微信内置浏览器同样可用（自动走自托管 pdf.js 兜底）；首页搜索框下附「**使用说明**」，各功能一看即会
 - 🚀 **多线路下载**：jsDelivr CDN → GitHub raw → 加速代理，失败自动降级
 - 📦 **大文件通道**：超 100MB 的资料（王道电子书、软工教材、PPT 模板合集）放在 [Releases](https://github.com/xyqmbyl/study-resources/releases)，网站下载按钮已自动指向
 - 🤖 **全自动索引**：push 即自动重建索引并部署网站，无需手动维护列表
