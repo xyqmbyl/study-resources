@@ -4,10 +4,12 @@
 - 文件条目: {type:"file", id, subject, name, ext, size, updated, path, urls:{jsd,jsd2,raw,proxy,proxy2}}
 - 大文件(在 .gitignore 中、走 Releases): url 写入 urls，来源 release-assets.json
 - 链接条目: 合并 .site/_data/*.json (type: link / book)
+- 目录注释: 目录可放一个 _note.json {"note":..., "files":{文件名:说明}} → file 条目带 note 字段
 """
 import json, hashlib, os, re, sys
 from pathlib import Path, PurePosixPath
 from datetime import datetime, timezone, timedelta
+from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
 SITE = ROOT / ".site"
@@ -16,8 +18,13 @@ BRANCH = "main"
 JSDELIVR_MAX = 20 * 1024 * 1024  # jsDelivr 单文件上限 20MB
 CN_TZ = timezone(timedelta(hours=8))
 
-SKIP_DIRS = {".git", ".github", ".site", ".scripts", ".v2c", ".zcode",
-             "_PDF处理", ".dsh-vision-router", ".dsh", "node_modules", "__pycache__"}
+# 任意深度命中即整棵子树跳过：目录名以 . / _ 开头，或属于明确列出的非资料目录。
+# 覆盖 .git/.github/.site/.scripts/.v2c/.zcode/.wpp_backup/.dsh* 、_PDF处理/_audit/ 等
+SKIP_EXACT_DIRS = {"整理技术目录（非学习资料）", "node_modules", "__pycache__"}
+
+def is_skip_dir(name: str) -> bool:
+    return name.startswith(".") or name.startswith("_") or name in SKIP_EXACT_DIRS
+
 SUBJECT_META = {  # 拼音首字母（检索用）与图标
     "C语言": ("cy", "🇨"), "JAVA": ("java", "☕"), "c++": ("cpp", "➕"),
     "web程序设计": ("web", "🌐"), "中南ppt模版": ("ppt", "📊"),
@@ -27,7 +34,7 @@ SUBJECT_META = {  # 拼音首字母（检索用）与图标
     "编译原理": ("byyl", "📜"), "英语": ("yy", "🔤"), "计算机体系结构": ("txjg", "🏛️"),
     "计算机组成原理": ("jczyl", "🔩"), "计算机网络(计科)": ("jjwl", "🌐"),
     "软件工程(计科)": ("rjgc", "🏗️"), "高数": ("gs", "∑"),
-    "大学生心理健康安全教育mooc期末考试答案（zxp版）.pdf": ("mooc", "🧠"),
+    "大学生心理健康": ("mooc", "🧠"),
 }
 
 # 科目名归一化：_data/*.json 与 Release 映射里的 subject 若写法不同，统一并到对应目录科目，
@@ -47,15 +54,55 @@ def canon_subject(name: str) -> str:
 def stable_id(rel: str) -> str:
     return hashlib.sha1(rel.encode("utf-8")).hexdigest()[:10]
 
+# ---- _note.json：目录级/文件级说明 -------------------------------------------
+_note_cache: dict = {}  # 目录路径 -> 解析后的 dict 或 None
+
+def load_note_json(d: Path) -> dict | None:
+    """读取目录下的 _note.json（内存缓存），不存在或格式非法返回 None。"""
+    key = str(d)
+    if key not in _note_cache:
+        data = None
+        p = d / "_note.json"
+        if p.is_file():
+            try:
+                raw = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(raw, dict):
+                    data = raw
+            except Exception as e:
+                print(f"warn: 解析 {p} 失败: {e}", file=sys.stderr)
+        _note_cache[key] = data
+    return _note_cache[key]
+
+def lookup_note(f: Path) -> str | None:
+    """从文件所在目录向上找最近的 _note.json：files[文件名] 优先，其次目录级 note。"""
+    name = f.name
+    d = f.parent
+    while True:
+        data = load_note_json(d)
+        if data is not None:  # 最近的 _note.json 优先，不再继续向上
+            fm = data.get("files")
+            if isinstance(fm, dict):
+                v = fm.get(name)
+                if isinstance(v, str) and v.strip():
+                    return v
+            v = data.get("note")
+            if isinstance(v, str) and v.strip():
+                return v
+            break
+        if d == ROOT or d.parent == d:  # 到仓库根（或文件系统根）为止
+            break
+        d = d.parent
+    return None
+
 def file_entry(root: Path, f: Path, release_map: dict) -> dict | None:
     rel = f.relative_to(root).as_posix()
     try:
         size = f.stat().st_size
     except OSError:
         return None
-    if "___" in rel or os.name == "nt" and f.name.startswith("~$"):
+    if "___" in rel or f.name.startswith("~$"):  # "___"=占位命名；~$=Office 锁文件（任何系统都排除，CI 上也会混入）
         return None
-    if f.name == ".gitkeep":  # 空文件夹占位符（git 不跟踪空目录），不算资源
+    if f.name in (".gitkeep", "_note.json"):  # 占位符/注释文件不算资源
         return None
     parts = PurePosixPath(rel).parts
     # subject = 顶级科目文件夹；folder = 科目下的子路径（多级目录导航用）
@@ -78,7 +125,7 @@ def file_entry(root: Path, f: Path, release_map: dict) -> dict | None:
         urls["proxy"] = f"https://ghfast.top/https://raw.githubusercontent.com/{REPO}/{BRANCH}/{rel}"
         urls["proxy2"] = f"https://ghproxy.net/https://raw.githubusercontent.com/{REPO}/{BRANCH}/{rel}"
     mtime = datetime.fromtimestamp(f.stat().st_mtime, CN_TZ)
-    return {
+    e = {
         "type": "file",
         "id": stable_id(rel),
         "subject": subject,
@@ -91,6 +138,43 @@ def file_entry(root: Path, f: Path, release_map: dict) -> dict | None:
         "path": rel,
         "urls": urls,
     }
+    note = lookup_note(f)
+    if note:
+        e["note"] = note
+    return e
+
+def scan_dir(base: Path, release_map: dict, all_dirs: set, skip_counts: dict) -> list:
+    """遍历一个科目目录：任意深度剪掉 SKIP 目录（计数），返回文件条目。"""
+    out = []
+    for dirpath, dirnames, filenames in os.walk(base):
+        keep = []
+        for dn in dirnames:
+            if is_skip_dir(dn):
+                skip_counts[dn] = skip_counts.get(dn, 0) + 1
+            else:
+                keep.append(dn)
+        keep.sort()
+        dirnames[:] = keep
+        here = Path(dirpath)
+        if here != base:  # 目录清单（含只有 .gitkeep 的空文件夹，前端文件管理器显示用）
+            all_dirs.add(here.relative_to(ROOT).as_posix())
+        for fn in sorted(filenames):
+            e = file_entry(ROOT, here / fn, release_map)
+            if e:
+                out.append(e)
+    return out
+
+def derive_name(item: dict) -> str:
+    """link/book 兜底可读名称：urls.raw 末段(URL 解码、去扩展名) → title → id。"""
+    raw = (item.get("urls") or {}).get("raw")
+    if raw:
+        seg = urlsplit(str(raw)).path.rstrip("/").rsplit("/", 1)[-1]
+        seg = unquote(seg)
+        if "." in seg:
+            seg = seg.rsplit(".", 1)[0]
+        if seg.strip():
+            return seg.strip()
+    return str(item.get("title") or item.get("id") or "").strip()
 
 def load_data(name: str) -> list:
     p = SITE / "_data" / name
@@ -108,20 +192,24 @@ def main():
         release_map = json.loads(rap.read_text(encoding="utf-8"))
 
     subjects, files, all_dirs = {}, [], set()
+    skip_counts: dict = {}
     for d in sorted(ROOT.iterdir()):
-        if not d.is_dir() or d.name in SKIP_DIRS:
+        if not d.is_dir():
             continue
-        meta = SUBJECT_META.get(d.name, (d.name[:4].lower(), "📁"))
+        if is_skip_dir(d.name):
+            skip_counts[d.name] = skip_counts.get(d.name, 0) + 1
+            continue
+        sub = canon_subject(d.name)  # 别名归一（幂等，不改磁盘目录名）
+        meta = SUBJECT_META.get(sub, (sub[:4].lower(), "📁"))
         count = 0
-        for f in sorted(d.rglob("*")):
-            if f.is_dir():  # 目录清单（含只有 .gitkeep 的空文件夹，前端文件管理器显示用）
-                all_dirs.add(f.relative_to(ROOT).as_posix())
-            elif f.is_file():
-                e = file_entry(ROOT, f, release_map)
-                if e:
-                    files.append(e)
-                    count += 1
-        subjects[d.name] = {"py": meta[0], "icon": meta[1], "count": count}
+        for e in scan_dir(d, release_map, all_dirs, skip_counts):
+            e["subject"] = sub
+            files.append(e)
+            count += 1
+        if sub in subjects:
+            subjects[sub]["count"] += count
+        else:
+            subjects[sub] = {"py": meta[0], "icon": meta[1], "count": count}
 
     # 顶层散落文件
     for f in sorted(ROOT.iterdir()):
@@ -137,6 +225,8 @@ def main():
         for item in load_data(name):
             item.setdefault("type", "book" if name == "books.json" else "link")
             item.setdefault("id", stable_id(item.get("url", item.get("title", ""))))
+            if not item.get("name"):  # link/book 补可读名称，保证 name 一定存在
+                item["name"] = derive_name(item)
             files.append(item)
             sub = canon_subject(item.get("subject", "其他"))
             item["subject"] = sub
@@ -187,8 +277,19 @@ def main():
     # 给 index.html 的静态资源打版本号（浏览器缓存破坏），每次构建都换新版本号
     tag = manifest["generated"].replace("-", "").replace(" ", "-").replace(":", "")
     html = (SITE / "index.html").read_text(encoding="utf-8")
-    html = re.sub(r"assets/(app\.js|style\.css)(\?v=[\w-]+)?", rf"assets/\1?v={tag}", html)
+    html = re.sub(r"assets/(app\.js|style\.css|fuse\.min\.js)(\?v=[\w-]+)?", rf"assets/\1?v={tag}", html)
     (SITE / "index.html").write_text(html, encoding="utf-8")
+
+    # 构建自检
+    note_n = sum(1 for x in files if x.get("type") == "file" and x.get("note"))
+    noname = [x for x in files if not x.get("name")]
+    skip_total = sum(skip_counts.values())
+    detail = ", ".join(f"{k}={v}" for k, v in sorted(skip_counts.items(), key=lambda kv: (-kv[1], kv[0])))
+    print(f"[自检] 科目数={len(subjects)} 条目数={len(files)} file有note={note_n} "
+          f"缺name={len(noname)} 跳过目录={skip_total}")
+    print(f"[自检] 跳过明细: {detail}")
+    if noname:
+        print(f"[自检] 警告: {len(noname)} 条条目缺 name", file=sys.stderr)
 
 if __name__ == "__main__":
     main()
