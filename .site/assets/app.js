@@ -718,10 +718,129 @@ function officeUrls(ext, url) {
 window.openPreview = (embed, view, title) => {
   $("#previewTitle").textContent = title || "文档预览";
   $("#previewOpen").href = view || embed;
+  $("#previewFrame").hidden = false; $("#pdfjsBox").hidden = true;
   $("#previewFrame").src = embed;
   $("#previewModal").hidden = false;
   document.body.style.overflow = "hidden";
 };
+
+/* ---------- pdf.js 兜底（Safari/WebKit 无 iframe 内嵌渲染 PDF 的能力） ---------- */
+// macOS Safari 与所有 iOS 浏览器（含微信 iOS 端，内核全部是 WebKit）里 <iframe> 内嵌 PDF
+// 只会白屏或触发下载，改用 pdf.js 把 PDF 画到 canvas；Chromium/Firefox 仍走浏览器原生查看器。
+// URL 加 ?pdfjs=1 或 #pdfjs=1 可在任意浏览器强制走此路径测试。
+const PDFJS_PATH = (() => {
+  const ua = navigator.userAgent;
+  const isIOS = /iP(hone|ad|od)/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1); // iPadOS 伪装桌面 UA
+  const isSafari = /Safari/.test(ua) && !/Chrom(e|ium)|Edg|OPR|Firefox|CriOS|FxiOS/.test(ua);
+  return isIOS || isSafari || /pdfjs=1/.test(location.search + location.hash);
+})();
+// 按需加载自托管的 pdf.js（Chromium 用户永远不会触发），加载过就复用
+let _pdfjsLibPromise = "";
+const loadPdfJs = () => {
+  if (_pdfjsLibPromise) return _pdfjsLibPromise;
+  _pdfjsLibPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "assets/pdfjs/pdf.min.js";
+    s.onload = () => resolve(window.pdfjsLib);
+    s.onerror = () => { _pdfjsLibPromise = ""; reject(new Error("pdf.js 加载失败")); };
+    document.head.appendChild(s);
+  }).then((lib) => { lib.GlobalWorkerOptions.workerSrc = "assets/pdfjs/pdf.worker.min.js"; return lib; });
+  return _pdfjsLibPromise;
+};
+let _pdfDoc = null, _pdfPages = [], _pdfZoom = 1, _pdfCur = 1, _pdfIO = null;
+const _pdfBusy = new Set();
+// 先按第 1 页版式铺占位页（aspect-ratio 定高），可见页再逐页 canvas 渲染，几百页的 PDF 也不会卡死
+async function renderPdfJs(blob) {
+  const lib = await loadPdfJs();
+  _pdfDoc = await lib.getDocument({ data: await blob.arrayBuffer() }).promise;
+  const vp1 = (await _pdfDoc.getPage(1)).getViewport({ scale: 1 });
+  _pdfCur = 1;
+  $("#pdfjsPageInfo").textContent = `1 / ${_pdfDoc.numPages}`;
+  $("#pdfjsZoomInfo").textContent = "适配宽度";
+  const box = $("#pdfjsPages");
+  box.innerHTML = "";
+  _pdfPages = [];
+  for (let i = 1; i <= _pdfDoc.numPages; i++) {
+    const d = document.createElement("div");
+    d.className = "pdfjs-page"; d.dataset.n = i;
+    d.style.aspectRatio = `${vp1.width} / ${vp1.height}`; // 占位高度按第 1 页版式估算
+    box.appendChild(d); _pdfPages.push(d);
+  }
+  // 弹层刚展开时 #pdfjsScroll 布局可能未稳定（clientWidth 为 0 会导致 canvas 尺寸 0×0 渲染挂起），等布局就绪再定宽
+  for (let i = 0; i < 30 && $("#pdfjsScroll").clientWidth < 100; i++)
+    await new Promise((r) => requestAnimationFrame(r));
+  _pdfZoom = Math.min(1.5, Math.max(0.35, ($("#pdfjsScroll").clientWidth - 24) / vp1.width)); // 初始适配宽度
+  layoutPdfJs();
+  if (_pdfIO) _pdfIO.disconnect();
+  _pdfIO = new IntersectionObserver((ents) => {
+    for (const en of ents) if (en.isIntersecting) renderPdfJsPage(en.target);
+  }, { root: $("#pdfjsScroll"), rootMargin: "600px 0px" });
+  _pdfPages.forEach((d) => _pdfIO.observe(d));
+  pdfjsRedrawVisible(); // IntersectionObserver 在弹层刚展开时可能延迟触发，直接重画当前可见页兜底
+}
+function layoutPdfJs() {
+  const avail = $("#pdfjsScroll").clientWidth - 24;
+  const w = Math.max(320, Math.round(avail * _pdfZoom)); // 宽度兜底 320px，防止异常布局下 0 宽渲染挂起
+  _pdfPages.forEach((d) => { d.style.width = w + "px"; });
+}
+async function renderPdfJsPage(d) {
+  if (!_pdfDoc || _pdfBusy.has(d) || d.querySelector("canvas") || d.clientWidth < 50) return;
+  _pdfBusy.add(d);
+  try {
+    const page = await _pdfDoc.getPage(+d.dataset.n);
+    const scale = d.clientWidth / page.getViewport({ scale: 1 }).width;
+    const dpr = Math.min(2, window.devicePixelRatio || 1); // 高分屏按 dpr 渲染，避免文字发虚
+    const vp = page.getViewport({ scale: scale * dpr });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
+    d.appendChild(canvas);
+    await page.render({ canvasContext: canvas.getContext("2d"), viewport: vp }).promise;
+  } catch (e) { /* 快速滚动时渲染任务被取消属正常 */ }
+  _pdfBusy.delete(d);
+}
+function pdfjsZoom(f) {
+  const old = _pdfZoom;
+  _pdfZoom = Math.min(3, Math.max(0.35, _pdfZoom * f));
+  if (_pdfZoom === old) return;
+  layoutPdfJs();
+  $("#pdfjsZoomInfo").textContent = Math.round(_pdfZoom * 100) + "%";
+  pdfjsRedrawVisible();
+}
+// 清掉已有 canvas 并重画当前可见页（缩放 / 窗口尺寸变化后）
+function pdfjsRedrawVisible() {
+  const root = $("#pdfjsScroll").getBoundingClientRect();
+  _pdfPages.forEach((d) => {
+    d.querySelector("canvas")?.remove();
+    const r = d.getBoundingClientRect();
+    if (r.bottom > root.top && r.top < root.bottom) renderPdfJsPage(d);
+  });
+}
+window.addEventListener("resize", () => {
+  if ($("#pdfjsBox").hidden) return;
+  clearTimeout(window.__pdfjsRzT);
+  window.__pdfjsRzT = setTimeout(() => { layoutPdfJs(); pdfjsRedrawVisible(); }, 200); // 窗口变化后按新宽度重排
+});
+function pdfjsGoPage(n) {
+  const d = _pdfPages[Math.max(1, Math.min(_pdfPages.length, n)) - 1];
+  if (d) d.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("#pdfjsPrev").onclick = () => pdfjsGoPage(_pdfCur - 1);
+$("#pdfjsNext").onclick = () => pdfjsGoPage(_pdfCur + 1);
+$("#pdfjsZoomIn").onclick = () => pdfjsZoom(1.25);
+$("#pdfjsZoomOut").onclick = () => pdfjsZoom(0.8);
+$("#pdfjsScroll").addEventListener("scroll", () => {
+  if (!_pdfPages.length) return;
+  const mid = $("#pdfjsScroll").getBoundingClientRect().top + 40;
+  for (const d of _pdfPages) if (d.getBoundingClientRect().top <= mid) _pdfCur = +d.dataset.n;
+  $("#pdfjsPageInfo").textContent = `${_pdfCur} / ${_pdfPages.length}`;
+}, { passive: true });
+function teardownPdfJs() {
+  if (_pdfIO) { _pdfIO.disconnect(); _pdfIO = null; }
+  _pdfPages = []; _pdfBusy.clear(); _pdfCur = 1;
+  if (_pdfDoc) { _pdfDoc.destroy().catch(() => {}); _pdfDoc = null; }
+  $("#pdfjsPages").innerHTML = "";
+  $("#pdfjsBox").hidden = true; $("#previewFrame").hidden = false;
+}
 // 大文件（>20MB 无 jsDelivr 线路的 PDF/图片/文本）预览：raw 直连国内常被墙导致 iframe 白屏，
 // 改为经级联代理线路（与下载同一套备用线路）fetch 成 blob 再交给 iframe 渲染；
 // mime 交给 Blob 以便 iframe 正确渲染，fname 用于「新窗口打开」时的落盘文件名
@@ -730,6 +849,7 @@ window.openBlobPreview = async (title, urls, mime, fname) => {
   $("#previewTitle").textContent = `${title || "文档预览"}（加载中…）`;
   $("#previewOpen").href = "#";
   $("#previewFrame").src = "about:blank";
+  $("#previewFrame").hidden = false; $("#pdfjsBox").hidden = true;
   $("#previewModal").hidden = false;
   document.body.style.overflow = "hidden";
   const fmtMB = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(b / 1024)) + "KB";
@@ -759,9 +879,15 @@ window.openBlobPreview = async (title, urls, mime, fname) => {
       if (_previewBlobUrl) URL.revokeObjectURL(_previewBlobUrl);
       _previewBlobUrl = URL.createObjectURL(blob);
       $("#previewTitle").textContent = title || "文档预览";
-      $("#previewOpen").href = _previewBlobUrl;
+      $("#previewOpen").href = _previewBlobUrl; // Safari 新标签页原生能渲染 PDF，新窗口打开不受影响
       $("#previewOpen").download = fname || title || "document.pdf";
-      $("#previewFrame").src = _previewBlobUrl;
+      if (mime === "application/pdf" && PDFJS_PATH) {
+        $("#previewFrame").hidden = true; $("#pdfjsBox").hidden = false;
+        $("#pdfjsZoomInfo").textContent = "适配宽度";
+        renderPdfJs(blob).catch(() => { $("#previewTitle").textContent = `${title || "文档预览"}（渲染失败，请下载后查看）`; });
+      } else {
+        $("#previewFrame").src = _previewBlobUrl;
+      }
       return;
     } catch (err) { clearTimeout(timer); /* 换下一条线路 */ }
   }
@@ -769,6 +895,7 @@ window.openBlobPreview = async (title, urls, mime, fname) => {
 };
 window.closePreview = () => {
   $("#previewModal").hidden = true; $("#previewFrame").src = "about:blank"; document.body.style.overflow = "";
+  teardownPdfJs();
   if (_previewBlobUrl) { URL.revokeObjectURL(_previewBlobUrl); _previewBlobUrl = ""; }
 };
 $("#previewModal").onclick = (e) => { if (e.target.id === "previewModal") closePreview(); };
@@ -778,6 +905,9 @@ document.addEventListener("click", (e) => {
   if (!a) return;
   e.preventDefault();
   if (a.dataset.blob) openBlobPreview(a.dataset.title, JSON.parse(a.dataset.blob || "[]"), a.dataset.mime, a.dataset.fname);
+  // Safari/WebKit 下 jsDelivr 小 PDF 同样 iframe 渲染不了：改走 blob→pdf.js 路径（jsDelivr 自带 CORS，fetch 不受限）
+  else if (PDFJS_PATH && /\.pdf(\?|#|$)/i.test(a.dataset.embed || ""))
+    openBlobPreview(a.dataset.title, [a.dataset.embed], "application/pdf", (a.dataset.title || "document") + ".pdf");
   else openPreview(a.dataset.embed, a.dataset.view, a.dataset.title);
 });
 

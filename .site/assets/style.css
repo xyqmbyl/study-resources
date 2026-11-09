@@ -407,3 +407,20 @@ a.fm-name:hover { color: var(--accent); }
 /* 分批渲染的「加载更多」 */
 .load-more { display: grid; place-items: center; padding: 18px 0 8px; }
 
+/* pdf.js 兜底渲染（Safari/WebKit 无 iframe 内嵌 PDF 能力），底色仿 Chrome 内置查看器 */
+#pdfjsBox { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  border-radius: 10px; background: #525659; }
+#pdfjsBox[hidden] { display: none; }
+.pdfjs-bar { flex: none; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 6px 10px; background: #3c3f44; color: #fff; }
+.pdfjs-bar button { width: 34px; height: 28px; border: 0; border-radius: 6px; background: transparent;
+  color: inherit; font-size: 13px; cursor: pointer; touch-action: manipulation; }
+.pdfjs-bar button:hover { background: #ffffff22; }
+#pdfjsPageInfo { min-width: 64px; text-align: center; font-size: 12px; }
+#pdfjsZoomInfo { min-width: 64px; text-align: center; font-size: 12px; }
+.pdfjs-sep { width: 1px; height: 18px; background: #ffffff33; }
+#pdfjsScroll { flex: 1; overflow: auto; padding: 12px; -webkit-overflow-scrolling: touch; }
+#pdfjsPages { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.pdfjs-page { position: relative; background: #fff; border-radius: 2px; overflow: hidden; }
+.pdfjs-page canvas { display: block; width: 100%; height: 100%; }
+

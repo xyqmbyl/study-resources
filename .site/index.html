@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>中南大学资源共享库</title>
 <meta name="description" content="中南大学资源共享库：真题、笔记、PPT、电子书与视频课程一站式检索下载">
-<link rel="stylesheet" href="assets/style.css?v=20261109-1152">
+<link rel="stylesheet" href="assets/style.css?v=20261109-2">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
 </head>
 <body>
@@ -186,6 +186,19 @@
       </div>
     </div>
     <iframe id="previewFrame" src="about:blank" title="文档预览"></iframe>
+    <!-- Safari/WebKit（macOS Safari 及所有 iOS 浏览器）不支持 iframe 内嵌渲染 PDF，改用 pdf.js canvas 兜底 -->
+    <div id="pdfjsBox" hidden>
+      <div class="pdfjs-bar">
+        <button id="pdfjsPrev" aria-label="上一页" title="上一页">◀</button>
+        <span id="pdfjsPageInfo">– / –</span>
+        <button id="pdfjsNext" aria-label="下一页" title="下一页">▶</button>
+        <span class="pdfjs-sep"></span>
+        <button id="pdfjsZoomOut" aria-label="缩小" title="缩小">－</button>
+        <span id="pdfjsZoomInfo">适配宽度</span>
+        <button id="pdfjsZoomIn" aria-label="放大" title="放大">＋</button>
+      </div>
+      <div id="pdfjsScroll"><div id="pdfjsPages"></div></div>
+    </div>
   </div>
 </div>
 
@@ -198,6 +211,6 @@
 </footer>
 
 <script src="assets/fuse.min.js?v=20261109-1152"></script>
-<script src="assets/app.js?v=20261109-1152"></script>
+<script src="assets/app.js?v=20261109-3"></script>
 </body>
 </html>
