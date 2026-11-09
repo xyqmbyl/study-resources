@@ -84,6 +84,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 /* 主体两栏 */
 .layout { display: grid; grid-template-columns: var(--sbw, 230px) 14px 1fr; max-width: 1440px; margin: 26px auto 60px; padding: 0 24px; }
 .sidebar { position: sticky; top: 72px; align-self: start; max-height: calc(100vh - 90px); overflow: auto; }
+/* 抽屉"✕ 关闭"按钮：仅移动端抽屉模式显示（桌面 display:none） */
+.drawer-close { display: none; }
 /* 侧栏/内容可拖拽分隔条 */
 .splitter { cursor: col-resize; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; }
 .splitter::before { content: ""; width: 4px; height: 64px; border-radius: 4px; background: var(--line); transition: all .15s; }
@@ -266,6 +268,11 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
     overflow-y: auto; overscroll-behavior: contain; box-shadow: 12px 0 40px rgba(0,0,0,.22);
     transform: translateX(-100%); visibility: hidden; transition: transform .28s ease, visibility .28s; }
   .sidebar.open { transform: translateX(0); visibility: visible; }
+  /* 抽屉顶部常驻"✕ 关闭"按钮：sticky 钉在抽屉首行，滚动抽屉时也看得见，防止被困 */
+  .drawer-close { display: flex; align-items: center; justify-content: center; gap: 6px;
+    position: sticky; top: -14px; z-index: 1; width: 100%; min-height: 44px; margin-bottom: 10px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink);
+    font-size: 14px; font-weight: 600; cursor: pointer; }
   /* 移动端滚动性能：去掉顶栏/回顶按钮的 backdrop 模糊（长列表在 iOS/低端安卓上的滚动卡顿主因），改不透明背景 */
   .topbar { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg); }
   .back-top { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--card); }

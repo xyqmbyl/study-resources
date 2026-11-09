@@ -229,11 +229,13 @@ function renderSidebar() {
   };
   walk(TREE, "", 0);
   $("#sidebar").innerHTML =
+    `<button type="button" class="drawer-close">✕ 关闭</button>` +
     `<div class="subj-item ${state.folder === "" ? "active" : ""}" data-p="" tabindex="0" role="button"><span>🏷️ 全部</span><span class="cnt">${MANIFEST.items.length}</span></div>` +
     rows.join("");
 }
 
 $("#sidebar").addEventListener("click", (e) => {
+  if (e.target.closest(".drawer-close")) { closeDrawer(); return; } // 移动端抽屉的"✕ 关闭"按钮
   const row = e.target.closest("[data-p]");
   if (!row) return;
   const p = row.dataset.p;
@@ -823,8 +825,8 @@ $("#menuBtn").onclick = () => {
   $("#sidebar").classList.toggle("open", open);
   $("#drawerMask").classList.toggle("show", open);
   $("#menuBtn").setAttribute("aria-expanded", String(open));
-  if (open) document.body.style.overflow = "hidden"; // 锁背景滚动，防 iOS 滚动穿透
-  else document.body.style.overflow = "";
+  // 不再锁背景滚动：锁死后若用户不知道点遮罩关闭，整页就"完全动不了"（真机反馈的卡死即此状态）。
+  // 抽屉自身 overflow-y:auto + overscroll-behavior:contain，内部滚动不会穿透到背景。
 };
 $("#drawerMask").onclick = closeDrawer;
 
@@ -1818,20 +1820,40 @@ loadCustomWp().then(applyWallpaper); // 先取本地自定义壁纸再应用，�
 /* ---------- 触摸诊断模式（?debug=touch）：排查真机触摸滚动被哪一层拦截 ---------- */
 if (location.search.includes("debug=touch")) {
   const dbg = document.createElement("div");
-  dbg.style.cssText = "position:fixed;top:60px;left:8px;right:8px;z-index:9999;background:rgba(0,0,0,.8);color:#0f0;font:12px/1.6 monospace;padding:6px 10px;border-radius:8px;pointer-events:none;white-space:pre-wrap;";
+  dbg.style.cssText = "position:fixed;top:60px;left:8px;right:8px;z-index:9999;background:rgba(0,0,0,.8);color:#0f0;font:11px/1.5 monospace;padding:6px 10px;border-radius:8px;pointer-events:none;white-space:pre-wrap;";
   document.body.appendChild(dbg);
-  let st = 0, mv = 0, en = 0, cancelCnt = 0, last = "-", mvY = "-";
+  let st = 0, mv = 0, en = 0, cancelCnt = 0, last = "-", mvY = "-", tgt = "-";
+  const sbInfo = () => {
+    const s = document.getElementById("sidebar");
+    if (!s) return "-";
+    const open = s.classList.contains("open") ? "开" : "关";
+    return `抽屉=${open} 抽屉内滚=${Math.round(s.scrollTop)}/${Math.max(0, s.scrollHeight - s.clientHeight)}px`;
+  };
   const upd = () => {
     dbg.textContent =
-      `touchstart=${st} touchmove=${mv} touchend=${en} cancel=${cancelCnt}\n` +
-      `scrollY=${Math.round(scrollY)} / 可滚高度=${document.documentElement.scrollHeight - innerHeight}px\n` +
-      `last=${last} mvY=${mvY}`;
+      `start=${st} move=${mv} end=${en} cancel=${cancelCnt}\n` +
+      `last=${last} mv=${mvY}\n` +
+      `按在=${tgt}\n` +
+      `windowScrollY=${Math.round(scrollY)} 可滚=${document.documentElement.scrollHeight - innerHeight}px\n` +
+      sbInfo();
   };
-  addEventListener("touchstart", (e) => { st++; last = "start y=" + (e.touches[0] ? Math.round(e.touches[0].clientY) : "?"); upd(); }, { passive: true });
-  addEventListener("touchmove", (e) => { mv++; mvY = "y=" + (e.touches[0] ? Math.round(e.touches[0].clientY) : "?"); if (mv % 5 === 0) upd(); }, { passive: true });
+  const tgtName = (e) => {
+    const t = e.touches[0]; if (!t) return "?";
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    if (!el) return "无元素";
+    const chain = [];
+    for (let n = el, i = 0; n && i < 4; i++, n = n.parentElement) {
+      const cls = typeof n.className === "string" && n.className ? "." + n.className.trim().split(/\s+/).slice(0, 2).join(".") : "";
+      chain.push(n.tagName.toLowerCase() + (n.id ? "#" + n.id : "") + cls);
+    }
+    return chain.join("<") + " [touch-action=" + getComputedStyle(el).touchAction + "]";
+  };
+  addEventListener("touchstart", (e) => { st++; const t = e.touches[0]; if (t) { last = `start x=${Math.round(t.clientX)} y=${Math.round(t.clientY)}`; tgt = tgtName(e); } upd(); }, { passive: true });
+  addEventListener("touchmove", (e) => { mv++; const t = e.touches[0]; if (t) mvY = `x=${Math.round(t.clientX)} y=${Math.round(t.clientY)}`; if (mv % 5 === 0) upd(); }, { passive: true });
   addEventListener("touchend", () => { en++; upd(); }, { passive: true });
   addEventListener("touchcancel", () => { cancelCnt++; upd(); }, { passive: true });
   addEventListener("scroll", upd, { passive: true });
+  setInterval(upd, 800); // 持续刷新：抽屉内部滚动位置变化也能实时看到
   upd();
 }
 
