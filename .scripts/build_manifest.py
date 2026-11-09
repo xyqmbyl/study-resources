@@ -278,6 +278,8 @@ def main():
     tag = manifest["generated"].replace("-", "").replace(" ", "-").replace(":", "")
     html = (SITE / "index.html").read_text(encoding="utf-8")
     html = re.sub(r"assets/(app\.js|style\.css|fuse\.min\.js)(\?v=[\w-]+)?", rf"assets/\1?v={tag}", html)
+    # 页脚可见构建号：用户一眼就能确认手机拿到的是哪个版本（排查缓存问题）
+    html = re.sub(r'(<span id="buildTag">)[^<]*(</span>)', rf"\g<1>{tag}\g<2>", html)
     (SITE / "index.html").write_text(html, encoding="utf-8")
 
     # 构建自检

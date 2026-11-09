@@ -125,11 +125,21 @@ $("#btnWallpaper").oncontextmenu = (e) => { e.preventDefault(); pickWallpaper();
 
 /* ---------- 加载与索引 ---------- */
 async function loadManifest() {
-  try {
-    MANIFEST = await (await fetch("manifest.json", { cache: "no-cache" })).json();
-  } catch (e) {
-    document.getElementById("results").innerHTML = `<p class="empty">😵 资源库索引加载失败，可能是网络问题。<br><small>试试 <a href="javascript:location.reload()">刷新页面</a>；若持续失败，可到 <a href="https://github.com/xyqmbyl/study-resources" target="_blank" rel="noopener">GitHub 仓库</a> 直接浏览下载资料。</small></p>`;
-    return;
+  // 移动弱网下 fetch 可能长时间挂起：加 20s 超时 + 自动重试一次，避免永远停在骨架屏（骨架页不够一屏高，看起来就像"页面完全动不了"）
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      MANIFEST = await (await fetch("manifest.json", { cache: "no-cache", signal: ctrl.signal })).json();
+      clearTimeout(timer);
+      break;
+    } catch (e) {
+      clearTimeout(timer);
+      if (attempt === 2) {
+        document.getElementById("results").innerHTML = `<p class="empty">😵 资源库索引加载失败，可能是网络问题。<br><small>试试 <a href="javascript:location.reload()">刷新页面</a>；若持续失败，可到 <a href="https://github.com/xyqmbyl/study-resources" target="_blank" rel="noopener">GitHub 仓库</a> 直接浏览下载资料。</small></p>`;
+        return;
+      }
+    }
   }
   MANIFEST.items.forEach((it) => (it._s = [it.name, it.title, it.subject, it.folder, it.note, it.author, it.py, ...(it.tags || [])].filter(Boolean).join(" ")));
   FUSE = new Fuse(MANIFEST.items, { keys: ["_s"], threshold: 0.35, ignoreLocation: true });
