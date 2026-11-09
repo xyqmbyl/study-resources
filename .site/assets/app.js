@@ -716,6 +716,7 @@ function officeUrls(ext, url) {
   return { embed: url, view: url }; // PDF
 }
 window.openPreview = (embed, view, title) => {
+  invalidatePreview(); // 从 blob 预览切到 iframe 预览时作废在途 blob 请求，防其完成后覆盖本预览
   $("#previewTitle").textContent = title || "文档预览";
   $("#previewOpen").href = view || embed;
   $("#previewFrame").hidden = false; $("#pdfjsBox").hidden = true;
@@ -844,8 +845,16 @@ function teardownPdfJs() {
 // 大文件（>20MB 无 jsDelivr 线路的 PDF/图片/文本）预览：raw 直连国内常被墙导致 iframe 白屏，
 // 改为经级联代理线路（与下载同一套备用线路）fetch 成 blob 再交给 iframe 渲染；
 // mime 交给 Blob 以便 iframe 正确渲染，fname 用于「新窗口打开」时的落盘文件名
-let _previewBlobUrl = "";
+let _previewBlobUrl = "", _previewCtrl = null, _previewGen = 0;
+// 作废在途预览请求：新预览打开或弹层关闭时调用。否则慢的大文件请求完成后会
+// 覆盖后打开的预览（标题、blob URL、iframe 全被旧内容占掉）——同下载路径 a._dlCtrl.abort() 的范式
+const invalidatePreview = () => {
+  _previewGen++;
+  if (_previewCtrl) { _previewCtrl.abort(); _previewCtrl = null; }
+};
 window.openBlobPreview = async (title, urls, mime, fname) => {
+  invalidatePreview();
+  const gen = _previewGen; // 本次请求的代际号；不匹配即已被更新预览/关闭作废
   $("#previewTitle").textContent = `${title || "文档预览"}（加载中…）`;
   $("#previewOpen").href = "#";
   $("#previewFrame").src = "about:blank";
@@ -855,10 +864,12 @@ window.openBlobPreview = async (title, urls, mime, fname) => {
   const fmtMB = (b) => b >= 1048576 ? (b / 1048576).toFixed(1) + "MB" : Math.max(1, Math.round(b / 1024)) + "KB";
   for (const u of urls) {
     const ctrl = new AbortController();
+    _previewCtrl = ctrl;
     const timer = setTimeout(() => ctrl.abort(), 20000); // 首字节 20 秒超时，同下载级联
     try {
       const resp = await fetch(u, { signal: ctrl.signal });
       clearTimeout(timer);
+      if (gen !== _previewGen) return; // 在途期间已有新预览/关闭，静默放弃
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       const total = +resp.headers.get("content-length") || 0;
       let blob;
@@ -868,6 +879,7 @@ window.openBlobPreview = async (title, urls, mime, fname) => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          if (gen !== _previewGen) { try { reader.cancel(); } catch (e3) {} return; } // 被覆盖：停止写标题、不再落 blob
           chunks.push(value); got += value.length;
           const pct = total ? ` ${Math.round((got / total) * 100)}%` : "";
           $("#previewTitle").textContent = `${title || "文档预览"}（加载中${pct}）`;
@@ -876,6 +888,7 @@ window.openBlobPreview = async (title, urls, mime, fname) => {
       } else {
         blob = await resp.blob();
       }
+      if (gen !== _previewGen) return; // 读完才发现已被覆盖：不撤销、不写入当前 blob
       if (_previewBlobUrl) URL.revokeObjectURL(_previewBlobUrl);
       _previewBlobUrl = URL.createObjectURL(blob);
       $("#previewTitle").textContent = title || "文档预览";
@@ -889,11 +902,16 @@ window.openBlobPreview = async (title, urls, mime, fname) => {
         $("#previewFrame").src = _previewBlobUrl;
       }
       return;
-    } catch (err) { clearTimeout(timer); /* 换下一条线路 */ }
+    } catch (err) {
+      clearTimeout(timer);
+      if (gen !== _previewGen) return; // 因新预览/关闭被中止，不再换线路
+      /* 换下一条线路 */
+    }
   }
-  $("#previewTitle").textContent = `${title || "文档预览"}（加载失败，请下载后查看）`;
+  if (gen === _previewGen) $("#previewTitle").textContent = `${title || "文档预览"}（加载失败，请下载后查看）`;
 };
 window.closePreview = () => {
+  invalidatePreview(); // 关闭弹层即中止在途预览请求，防慢请求后续覆盖
   $("#previewModal").hidden = true; $("#previewFrame").src = "about:blank"; document.body.style.overflow = "";
   teardownPdfJs();
   if (_previewBlobUrl) { URL.revokeObjectURL(_previewBlobUrl); _previewBlobUrl = ""; }
