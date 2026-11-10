@@ -385,24 +385,34 @@ a.fm-name:hover { color: var(--accent); }
   .topbar-right {
     display: none;
     position: absolute;
-    top: calc(100% + 6px);
+    top: calc(100% + 8px);
     right: 12px;
     z-index: 60;
     flex-direction: column;
     align-items: stretch;
     gap: 2px;
-    min-width: 10.5em;
+    min-width: 172px;
     padding: 6px;
     background: var(--card);
-    border: 1px solid var(--line);
+    border: 1px solid color-mix(in srgb, var(--ink2) 40%, var(--line));
     border-radius: 14px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, .12), 0 14px 36px rgba(0, 0, 0, .3);
   }
+  /* 深色模式：面板用比页面亮一档的浮层色，避免与背景融为一片 */
+  [data-theme="dark"] .topbar-right { background: #2c2822; border-color: #4a4238; }
   .topbar-right.open { display: flex; }
+  /* 菜单项统一为左对齐行：同字号同颜色，去掉小按钮的边框/圆角，悬停整行变色 */
   .topbar-right .icon-btn, .topbar-right .gh-link {
-    width: 100%; justify-content: flex-start; min-height: 44px; border-color: transparent;
+    display: flex; align-items: center; gap: 12px;
+    width: 100%; min-height: 44px; min-width: 0;
+    padding: 0 14px;
+    border: none; border-radius: 9px;
+    background: none;
+    color: var(--ink); font-size: 15px; font-family: inherit; text-align: left; line-height: 1.4;
   }
-  .topbar-right .icon-btn:hover, .topbar-right .gh-link:hover { border-color: var(--accent); }
+  .topbar-right .icon-btn:hover, .topbar-right .gh-link:hover { background: var(--bg2); border: none; }
+  [data-theme="dark"] .topbar-right .icon-btn:hover,
+  [data-theme="dark"] .topbar-right .gh-link:hover { background: #38322a; }
 }
 @media (min-width: 640.02px) {
   #topMoreBtn { display: none; }
