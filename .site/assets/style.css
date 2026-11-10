@@ -379,12 +379,42 @@ a.fm-name:hover { color: var(--accent); }
 .gh-link, .icon-btn { white-space: nowrap; }
 @media (max-width: 640px) {
   .topbar { padding: 9px 12px; }
-  .topbar-right { gap: 6px; }
   .brand { font-size: 14.5px; }
-  .icon-btn { padding: 5px 7px; }
-  .gh-link { padding: 5px 8px; font-size: 12.5px; }
-  #navCustomBtn .nav-label { display: none; } /* 窄屏只留 ☰ 图标，完整文案在 title 里 */
+  /* 窄屏：右上按钮收进 ⋮ 更多菜单（.topbar-right 变为下拉面板），顶栏只留 ☰ 目录 / 站名 / ⋮ */
+  #topMoreBtn { display: inline-flex; }
+  .topbar-right {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 12px;
+    z-index: 60;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    min-width: 10.5em;
+    padding: 6px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
+  }
+  .topbar-right.open { display: flex; }
+  .topbar-right .icon-btn, .topbar-right .gh-link {
+    width: 100%; justify-content: flex-start; min-height: 44px; border-color: transparent;
+  }
+  .topbar-right .icon-btn:hover, .topbar-right .gh-link:hover { border-color: var(--accent); }
 }
+@media (min-width: 640.02px) {
+  #topMoreBtn { display: none; }
+  #btnTheme .menu-text, #btnWallpaper .menu-text { display: none; } /* 桌面端主题/壁纸仍是纯图标 */
+}
+
+/* 管理台模式下顶栏隐藏首页专属的目录抽屉与自定义导航，站名恢复显示（也可点击回首页） */
+body.in-admin #menuBtn, body.in-admin #navCustomBtn { display: none; }
+
+/* 管理台页头：标题 + 返回首页按钮 */
+.admin-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.admin-head h2 { margin: 0; }
 
 /* 无障碍：用户偏好减少动画 —— 全局动画/过渡归零、滚动不再平滑 */
 @media (prefers-reduced-motion: reduce) {

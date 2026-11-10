@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>中南大学资源共享库</title>
 <meta name="description" content="中南大学资源共享库：真题、笔记、PPT、电子书与视频课程一站式检索下载">
-<link rel="stylesheet" href="assets/style.css?v=20261109-3">
+<link rel="stylesheet" href="assets/style.css?v=20261110-3">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
 </head>
 <body>
@@ -15,12 +15,13 @@
 <header class="topbar">
   <button id="menuBtn" class="menu-btn" aria-label="打开目录菜单" aria-expanded="false" aria-controls="sidebar">☰</button>
   <a class="brand" href="#">📚 中南大学资源共享库</a>
-  <div class="topbar-right">
-    <button id="btnTheme" class="icon-btn" title="切换深浅色">🌙</button>
-    <button id="btnWallpaper" class="icon-btn" title="切换壁纸">🖼️</button>
-    <button id="navCustomBtn" class="gh-link" title="自定义导航：调整科目顺序 / 隐藏科目">☰<span class="nav-label"> 自定义导航</span></button>
-    <a class="gh-link" href="#admin" title="管理台">⚙️ 管理台</a>
-    <a class="gh-link" href="https://github.com/xyqmbyl/study-resources" target="_blank" title="GitHub 仓库">⭐ GitHub</a>
+  <button id="topMoreBtn" class="icon-btn" aria-label="更多：主题 / 壁纸 / 导航 / 管理台" aria-expanded="false" aria-controls="topbarRight" title="更多">⋮</button>
+  <div class="topbar-right" id="topbarRight">
+    <button id="btnTheme" class="icon-btn" title="切换深浅色">🌙<span class="menu-text"> 深浅色</span></button>
+    <button id="btnWallpaper" class="icon-btn" title="切换壁纸">🖼️<span class="menu-text"> 壁纸</span></button>
+    <button id="navCustomBtn" class="gh-link" title="自定义导航：调整科目顺序 / 隐藏科目">🗂️<span class="nav-label"> 自定义导航</span></button>
+    <a class="gh-link" href="#admin" title="管理台">⚙️<span class="menu-text"> 管理台</span></a>
+    <a class="gh-link" href="https://github.com/xyqmbyl/study-resources" target="_blank" title="GitHub 仓库">⭐<span class="menu-text"> GitHub</span></a>
   </div>
 </header>
 
@@ -62,7 +63,10 @@
   <!-- 管理页 -->
   <section id="viewAdmin" hidden>
     <div class="admin-box">
-      <h2>管理台</h2>
+      <div class="admin-head">
+        <h2>管理台</h2>
+        <a class="btn ghost" href="#" title="返回首页">← 返回首页</a>
+      </div>
       <p class="admin-hint">用 GitHub Token 登录：<b>有仓库写权限</b>（协作者）→ 管理员模式，可直接上传、替换、移动、删除资料；<b>无写权限</b>（普通同学）→ 投稿模式，同样能上传资料，系统自动 Fork + 提 PR，管理员合并后上线。Token 只保存在你自己的浏览器里。</p>
       <div id="adminLoginBox">
         <input id="adminToken" type="password" placeholder="github_pat_ / ghp_ 开头的 Fine-grained Token">
@@ -215,7 +219,7 @@
       </div>
       <div class="help-card">
         <h4>🗂 怎么浏览</h4>
-        <p>左侧目录树按科目逐层点开浏览；顶部「☰ 自定义导航」可拖动调整科目顺序、取消勾选隐藏不关心的科目（设置只保存在你自己的浏览器里，随时可恢复默认）。</p>
+        <p>左侧目录树按科目逐层点开浏览；顶部「🗂️ 自定义导航」可拖动调整科目顺序、取消勾选隐藏不关心的科目（设置只保存在你自己的浏览器里，随时可恢复默认）。</p>
       </div>
       <div class="help-card">
         <h4>👁 怎么在线预览</h4>
@@ -250,6 +254,6 @@
 </footer>
 
 <script src="assets/fuse.min.js?v=20261109-1152"></script>
-<script src="assets/app.js?v=20261109-5"></script>
+<script src="assets/app.js?v=20261110-2"></script>
 </body>
 </html>

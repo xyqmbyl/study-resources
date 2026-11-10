@@ -27,7 +27,7 @@ function initTheme() {
 }
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
-  $("#btnTheme").textContent = t === "dark" ? "☀️" : "🌙";
+  $("#btnTheme").innerHTML = (t === "dark" ? "☀️" : "🌙") + '<span class="menu-text"> 深浅色</span>'; // 窄屏 ⋮ 菜单里显示文字
 }
 $("#btnTheme").onclick = () => {
   const t = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
@@ -112,7 +112,7 @@ function applyWallpaper() {
   else if (WALLPAPERS[i]) el.style.backgroundImage = `url("${WALLPAPERS[i]}")`;
   else el.style.backgroundImage = "";
   const btn = $("#btnWallpaper");
-  btn.textContent = WP_LABELS[i];
+  btn.innerHTML = WP_LABELS[i] + '<span class="menu-text"> 壁纸</span>'; // 窄屏 ⋮ 菜单里显示文字
   btn.title = "点击切换壁纸（关/1/2/3/自定义），右键上传自定义壁纸";
 }
 $("#btnWallpaper").onclick = () => {
@@ -756,7 +756,13 @@ const _pdfBusy = new Set();
 // 先按第 1 页版式铺占位页（aspect-ratio 定高），可见页再逐页 canvas 渲染，几百页的 PDF 也不会卡死
 async function renderPdfJs(blob) {
   const lib = await loadPdfJs();
-  _pdfDoc = await lib.getDocument({ data: await blob.arrayBuffer() }).promise;
+  // cMapUrl/standardFontDataUrl：CID 中文 PDF 必需，缺失会导致中文整片消失只剩数字下划线
+  _pdfDoc = await lib.getDocument({
+    data: await blob.arrayBuffer(),
+    cMapUrl: "assets/pdfjs/cmaps/",
+    cMapPacked: true,
+    standardFontDataUrl: "assets/pdfjs/standard_fonts/",
+  }).promise;
   const vp1 = (await _pdfDoc.getPage(1)).getViewport({ scale: 1 });
   _pdfCur = 1;
   $("#pdfjsPageInfo").textContent = `1 / ${_pdfDoc.numPages}`;
@@ -937,6 +943,7 @@ function route() {
   const admin = location.hash === "#admin";
   $("#viewHome").hidden = admin;
   $("#viewAdmin").hidden = !admin;
+  document.body.classList.toggle("in-admin", admin); // 管理台下隐藏目录抽屉/自定义导航按钮，顶栏留出站名（可点回首页）
   if (admin) { if (TOKEN()) enterAdmin(); return; }
   // 回主页/前进/后退：按当前 hash 恢复视图（空 hash = 清空搜索与目录筛选）
   if (MANIFEST) applyHashState();
@@ -980,6 +987,26 @@ $("#menuBtn").onclick = () => {
   // 抽屉自身 overflow-y:auto + overscroll-behavior:contain，内部滚动不会穿透到背景。
 };
 $("#drawerMask").onclick = closeDrawer;
+
+/* 窄屏 ⋮ 更多菜单：收纳主题/壁纸/自定义导航/管理台/GitHub，顶栏只留 ☰ / 站名 / ⋮
+   （id 用 topMoreBtn，避免与列表"加载更多"按钮 #moreBtn 撞车） */
+const topMoreBtn = $("#topMoreBtn"), moreMenu = $("#topbarRight");
+function closeMoreMenu() {
+  moreMenu.classList.remove("open");
+  topMoreBtn.setAttribute("aria-expanded", "false");
+}
+$("#topMoreBtn").onclick = (e) => {
+  e.stopPropagation(); // 不触发下面的点外关闭
+  const open = !moreMenu.classList.contains("open");
+  moreMenu.classList.toggle("open", open);
+  topMoreBtn.setAttribute("aria-expanded", String(open));
+};
+document.addEventListener("click", (e) => {
+  if (!moreMenu.classList.contains("open")) return;
+  if (topMoreBtn.contains(e.target) || moreMenu.contains(e.target)) return;
+  closeMoreMenu(); // 点菜单外空白处收起
+});
+moreMenu.addEventListener("click", (e) => { if (e.target.closest("a")) closeMoreMenu(); }); // 点了会跳转的项后自动收起
 
 const backTop = $("#backTop");
 addEventListener("scroll", () => backTop.classList.toggle("show", scrollY > 600), { passive: true });
