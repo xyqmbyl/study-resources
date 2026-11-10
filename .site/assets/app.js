@@ -756,12 +756,14 @@ const _pdfBusy = new Set();
 // 先按第 1 页版式铺占位页（aspect-ratio 定高），可见页再逐页 canvas 渲染，几百页的 PDF 也不会卡死
 async function renderPdfJs(blob) {
   const lib = await loadPdfJs();
-  // cMapUrl/standardFontDataUrl：CID 中文 PDF 必需，缺失会导致中文整片消失只剩数字下划线
+  // cMapUrl/standardFontDataUrl：CID 中文 PDF 必需，缺失会导致中文整片消失只剩数字下划线。
+  // 必须是绝对 URL：worker 内相对路径以 worker 脚本位置解析，"assets/pdfjs/..." 会变成 assets/pdfjs/assets/... 404
+  const _pdfAssets = new URL("assets/pdfjs/", document.baseURI).href;
   _pdfDoc = await lib.getDocument({
     data: await blob.arrayBuffer(),
-    cMapUrl: "assets/pdfjs/cmaps/",
+    cMapUrl: _pdfAssets + "cmaps/",
     cMapPacked: true,
-    standardFontDataUrl: "assets/pdfjs/standard_fonts/",
+    standardFontDataUrl: _pdfAssets + "standard_fonts/",
   }).promise;
   const vp1 = (await _pdfDoc.getPage(1)).getViewport({ scale: 1 });
   _pdfCur = 1;
