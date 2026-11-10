@@ -24,3 +24,5 @@ __pycache__/
 # 本地审计/工具残留（勿提交）
 audit_report.json
 .dsh-vision-router/
+_audit/
+整理技术目录（非学习资料）/
