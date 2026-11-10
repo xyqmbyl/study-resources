@@ -381,7 +381,12 @@ a.fm-name:hover { color: var(--accent); }
   .topbar { padding: 9px 12px; }
   .brand { font-size: 14.5px; }
   /* 窄屏：右上按钮收进 ⋮ 更多菜单（.topbar-right 变为下拉面板），顶栏只留 ☰ 目录 / 站名 / ⋮ */
-  #topMoreBtn { display: inline-flex; }
+  #topMoreBtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; padding: 0; color: var(--ink); font-size: 20px;
+  }
+  #topMoreBtn svg { display: block; }
+  #topMoreBtn:hover { border-color: var(--accent); color: var(--accent); }
   .topbar-right {
     display: none;
     position: absolute;
