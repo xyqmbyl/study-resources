@@ -1929,8 +1929,10 @@ async function fmDeleteItems(items) {
   if (!confirm(`确定删除 ${items.length} 项：${names}？\n文件夹会连同其中全部文件一起删除，此操作直接提交到仓库。`)) return;
   try {
     const all = await fmExpandDirs([...items]);
-    const dlItems = all.filter((x) => !x.__keep && isDl(x));
-    const gitChanges = all.filter((x) => x.__keep || !isDl(x)).map((x) => ({ op: "rm", path: x.path }));
+    const dlItems = all.filter((x) => !x.__keep && !x.__dir && isDl(x));
+    // __dir 只是选区标记（无 path），展开后必须剔除，否则会生成 path:undefined 的空 rm 条目
+    // → GitHub 422 "tree.path cannot be blank"（2026-11-12 实测修复）
+    const gitChanges = all.filter((x) => (x.__keep || (!x.__dir && !isDl(x))) && x.path).map((x) => ({ op: "rm", path: x.path }));
     let map = null;
     for (const it of dlItems) {
       const info = await releaseAssetInfo(it);
