@@ -141,6 +141,11 @@ async function loadManifest() {
       }
     }
   }
+  try { // 管理台刚操作过但 Pages 部署未完成时，本地缓存清单比同源部署版新 → 刷新也立即可见；
+        // 部署完成后同源版更新自动接管（generated 对比，无需清理）
+    const cached = JSON.parse(localStorage.getItem("manifest_cache") || "null");
+    if (cached?.items && cached.generated > MANIFEST.generated) MANIFEST = cached;
+  } catch (e) { /* 缓存损坏/配额问题：退回同源 */ }
   applyManifestData();
   setTimeout(maybeFastManifest, 5000); // 同源清单若已落后仓库，后台直读最新版（不阻塞首屏）
 }
@@ -172,7 +177,8 @@ async function maybeFastManifest() {
     const [d, t] = MANIFEST.generated.split(" ");
     const [Y, Mo, D] = d.split("-").map(Number), [H, Mi] = t.split(":").map(Number);
     const genMs = Date.UTC(Y, Mo - 1, D, H, Mi) - 8 * 3600 * 1000; // 清单时间戳为 UTC+8
-    if (Date.now() - genMs < 10 * 60000) return; // 够新鲜：走同源即可
+    const isAdmin = !!localStorage.getItem("admin_token"); // 管理员始终核对仓库最新版（可能换设备操作过/对账期）
+    if (!isAdmin && Date.now() - genMs < 3 * 60000) return; // 访客：够新鲜就走同源，不额外拉 2MB
     const base = `https://raw.githubusercontent.com/${REPO}/main/.site/manifest.json`;
     for (const u of [`https://ghfast.top/${base}`, `https://ghproxy.net/${base}`, base]) {
       try {
@@ -1263,7 +1269,10 @@ async function commitChanges(changes, message, dest = { repo: REPO, branch: "mai
     const nc = await ghApi(`/repos/${dest.repo}/git/commits`, { method: "POST", body: { message, tree: nt.sha, parents: [ref.object.sha] } });
     try {
       await ghApi(`/repos/${dest.repo}/git/refs/heads/${dest.branch}`, { method: "PATCH", body: { sha: nc.sha } });
-      if (patched) { try { applyManifestData(patched); } catch (e) { console.warn(e); } }
+      if (patched) {
+        try { applyManifestData(patched); } catch (e) { console.warn(e); }
+        try { localStorage.setItem("manifest_cache", JSON.stringify(patched)); } catch (e) { /* 配额不足则跳过，同源版兜底 */ }
+      }
       return nc.sha;
     } catch (e) {
       // HEAD 被并发推进（连点按钮 / Actions 正在重建索引）：退避后基于最新 HEAD 重来，最多 5 次
