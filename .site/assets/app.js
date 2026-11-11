@@ -1266,8 +1266,14 @@ async function commitChanges(changes, message, dest = { repo: REPO, branch: "mai
       if (patched) { try { applyManifestData(patched); } catch (e) { console.warn(e); } }
       return nc.sha;
     } catch (e) {
-      // HEAD 被并发推进：基于最新 HEAD 重来，最多 3 次
-      if (attempt < 3 && String(e.message).startsWith("GitHub API 422")) continue;
+      // HEAD 被并发推进（连点按钮 / Actions 正在重建索引）：退避后基于最新 HEAD 重来，最多 5 次
+      if (attempt < 5 && String(e.message).startsWith("GitHub API 422")) {
+        await new Promise((r) => setTimeout(r, 1000 * attempt));
+        continue;
+      }
+      if (String(e.message).startsWith("GitHub API 422")) {
+        throw new Error(`连续 ${attempt} 次检测到并发提交（可能连点了按钮，或 Actions 正在重建索引），请等几秒再试`);
+      }
       throw e;
     }
   }
@@ -1867,18 +1873,36 @@ $("#fmMulti").onclick = () => {
   $("#fmMulti").textContent = fmMultiMode ? "✅ 多选中（单击=加选/减选）" : "☑ 多选模式";
 };
 
+// 新建文件夹：用页面内弹窗代替原生 prompt——Edge 等浏览器拦截脚本对话框时 prompt 会
+// 静默返回 null（无任何反应无日志），页面内弹窗不受影响
+let fdBase = "";
 function fmNewFolderAt(base) {
-  const name = prompt(`新文件夹名称（将在 ${base || "根目录"} 下创建）：`);
-  if (!name) return;
-  mkdir(base ? `${base}/${name}` : name);
+  fdBase = base || "";
+  $("#fdBase").textContent = `将在 ${base || "仓库根目录"} 下创建`;
+  $("#fdName").value = "";
+  $("#fdLog").textContent = "";
+  $("#folderModal").hidden = false;
+  $("#fdName").focus();
 }
+$("#fdOk").onclick = () => {
+  const name = $("#fdName").value.trim();
+  if (!name) return log("✗ 请填写文件夹名", "#fdLog");
+  if (name.includes("/")) return log("✗ 文件夹名不能含 /", "#fdLog");
+  $("#folderModal").hidden = true;
+  mkdir(fdBase ? `${fdBase}/${name}` : name, "#fmLog");
+};
+$("#fdName").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#fdOk").click(); });
 
+let mkdirBusy = false; // 防连点：同一时刻只允许一个创建提交在途（并发会互相抢 HEAD 触发 422）
 async function mkdir(rel, sel = "#fmLog") {
+  if (mkdirBusy) return log("⏳ 上一个创建还在提交中，请等几秒", sel);
+  mkdirBusy = true;
   try {
     await commitChanges([{ op: "put", path: `${rel}/.gitkeep`, content: "" }], `mkdir: ${rel}`);
     log(`✔ 已创建 ${rel}/，本页已即时更新`, sel);
     renderFm();
   } catch (e) { log("✗ " + e.message, sel); }
+  finally { mkdirBusy = false; }
 }
 
 /* --- 删除（支持批量：文件/文件夹混合，git 部分单 commit，Release 附件逐个删） --- */
