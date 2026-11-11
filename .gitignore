@@ -26,3 +26,6 @@ audit_report.json
 .dsh-vision-router/
 _audit/
 整理技术目录（非学习资料）/
+
+# Mimosa 安全扫描产物（任意层级：根目录与 .site/assets/ 下都会生成）
+.mimosa/
