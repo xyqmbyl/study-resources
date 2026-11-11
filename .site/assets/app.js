@@ -141,6 +141,13 @@ async function loadManifest() {
       }
     }
   }
+  applyManifestData();
+  setTimeout(maybeFastManifest, 5000); // 同源清单若已落后仓库，后台直读最新版（不阻塞首屏）
+}
+
+// 清单就位后的统一接线（搜索索引/统计/目录树/渲染）——首次加载与管理台即时补丁共用
+function applyManifestData(m) {
+  if (m) { MANIFEST = m; TREE = null; }
   MANIFEST.items.forEach((it) => (it._s = [it.name, it.title, it.subject, it.folder, it.note, it.author, it.py, ...(it.tags || [])].filter(Boolean).join(" ")));
   FUSE = new Fuse(MANIFEST.items, { keys: ["_s"], threshold: 0.35, ignoreLocation: true });
 
@@ -154,6 +161,32 @@ async function loadManifest() {
   $("#folderList").innerHTML = [...new Set(MANIFEST.items.filter((x) => x.folder).map((x) => x.subject + "/" + x.folder))]
     .map((f) => `<option value="${esc(f)}">`).join("");
   renderChips(); renderSidebar(); render();
+  if (!$("#tab-fm").hidden) renderFm();
+}
+
+// 同源（Pages 部署版）清单落后仓库超过 10 分钟时（刚在管理台操作完/Actions 排队中），
+// 后台直读仓库 main 的最新清单替换，不阻塞页面；正常访客不受影响，三条线路依次尝试。
+async function maybeFastManifest() {
+  try {
+    if (!MANIFEST?.generated) return;
+    const [d, t] = MANIFEST.generated.split(" ");
+    const [Y, Mo, D] = d.split("-").map(Number), [H, Mi] = t.split(":").map(Number);
+    const genMs = Date.UTC(Y, Mo - 1, D, H, Mi) - 8 * 3600 * 1000; // 清单时间戳为 UTC+8
+    if (Date.now() - genMs < 10 * 60000) return; // 够新鲜：走同源即可
+    const base = `https://raw.githubusercontent.com/${REPO}/main/.site/manifest.json`;
+    for (const u of [`https://ghfast.top/${base}`, `https://ghproxy.net/${base}`, base]) {
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        const r = await fetch(`${u}?t=${Date.now()}`, { signal: ctrl.signal, cache: "no-cache" });
+        clearTimeout(timer);
+        if (!r.ok) continue;
+        const m = await r.json();
+        if (m?.items && m.generated > MANIFEST.generated) applyManifestData(m);
+        return;
+      } catch (e) { /* 换下一条线路 */ }
+    }
+  } catch (e) { /* 静默：同源清单永远是兜底 */ }
 }
 
 /* ---------- 筛选 chips ---------- */
@@ -1045,12 +1078,170 @@ const fileB64 = (file) => new Promise((res, rej) => {
   fr.readAsDataURL(file);
 });
 
+/* __MP_BEGIN__
+   manifest 即时补丁：管理台操作在同一个 commit 里附带打完补丁的最新索引，
+   本页提交成功后 0 秒生效，其他访客经仓库直读/下次部署也能立刻拿到。
+   生成规则与 .scripts/build_manifest.py 严格对齐；Actions 全量重建仍照常运行，作为对账兜底。 */
+const MP_JSD_MAX = 20 * 1024 * 1024; // jsDelivr 单文件上限
+const MP_SUBJECT_META = {
+  "C语言": ["cy", "🇨"], "JAVA": ["java", "☕"], "c++": ["cpp", "➕"],
+  "web程序设计": ["web", "🌐"], "中南ppt模版": ["ppt", "📊"],
+  "习概": ["xg", "📕"], "人工智能": ["rgzn", "🤖"], "军理": ["jl", "🎖️"],
+  "思修": ["sx", "📘"], "操作系统": ["czxt", "🖥️"], "数据结构": ["sjjg", "🌲"],
+  "汇编语言": ["hbyy", "⚙️"], "电路": ["dl", "🔌"], "线代": ["xd", "🧮"],
+  "编译原理": ["byyl", "📜"], "英语": ["yy", "🔤"], "计算机体系结构": ["txjg", "🏛️"],
+  "计算机组成原理": ["jczyl", "🔩"], "计算机网络(计科)": ["jjwl", "🌐"],
+  "软件工程(计科)": ["rjgc", "🏗️"], "高数": ["gs", "∑"],
+  "大学生心理健康": ["mooc", "🧠"],
+};
+const MP_SUBJECT_ALIASES = { "Java": "JAVA", "C++": "c++", "C": "C语言", "计算机网络": "计算机网络(计科)", "软件工程": "软件工程(计科)", "大学物理": "其他" };
+const mpCanon = (s) => MP_SUBJECT_ALIASES[s] || s;
+const mpPad = (n) => String(n).padStart(2, "0");
+const mpCn = (ms) => { // 与 Python CN_TZ 一致：UTC+8
+  const now = ms ?? Date.now(), d = new Date(now + 8 * 3600 * 1000);
+  return { date: `${d.getUTCFullYear()}-${mpPad(d.getUTCMonth() + 1)}-${mpPad(d.getUTCDate())}`, time: `${mpPad(d.getUTCHours())}:${mpPad(d.getUTCMinutes())}`, ts: Math.round(now / 1000) };
+};
+const mpStem = (fn) => { const i = fn.lastIndexOf("."); return i > 0 ? fn.slice(0, i) : fn; };
+const mpExt = (fn) => { const i = fn.lastIndexOf("."); return i > 0 ? fn.slice(i + 1).toLowerCase() || "文件" : "文件"; };
+async function mpSha1(str) {
+  const buf = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(str));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 10);
+}
+function mpUrls(rel, size) {
+  const u = {};
+  if (size <= MP_JSD_MAX) {
+    u.jsd = `https://cdn.jsdelivr.net/gh/${REPO}@main/${rel}`;
+    u.jsd2 = `https://gcore.jsdelivr.net/gh/${REPO}@main/${rel}`;
+  }
+  u.raw = `https://raw.githubusercontent.com/${REPO}/main/${rel}`;
+  u.proxy = `https://ghfast.top/https://raw.githubusercontent.com/${REPO}/main/${rel}`;
+  u.proxy2 = `https://ghproxy.net/https://raw.githubusercontent.com/${REPO}/main/${rel}`;
+  return u;
+}
+function mpB64(str) { // 大字符串分块转 base64（避免 spread 参数上限栈溢出）
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+const mpB64Text = (b64) => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\n/g, "")), (c) => c.charCodeAt(0)));
+// 资源文件判定（对齐 Python）：占位符/锁文件不进索引；点开头目录与 .site/.scripts 下不进
+// （Python 只对目录名做点开头过滤，文件名不做）；"___" 占位命名不进；
+// 根目录散落文件仅收 pdf/docx/doc/pptx/zip（subject=其他）
+function mpIsResource(path) {
+  const parts = path.split("/"), fn = parts[parts.length - 1];
+  if (fn === ".gitkeep" || fn === "_note.json" || fn.startsWith("~$") || path.includes("___")) return false;
+  if (parts.slice(0, -1).some((p) => p.startsWith("."))) return false;
+  if (parts.length === 1 && !/\.(pdf|docx?|pptx|zip)$/i.test(path)) return false;
+  return true;
+}
+async function mpSkeleton(path, opt = {}) {
+  const parts = path.split("/");
+  const fileName = parts[parts.length - 1];
+  const t = opt.release ? { date: mpCn().date, ts: 0 } : mpCn(opt.mtime); // Release 通道条目 ts=0、updated=构建日（对齐 Python 回填）
+  return {
+    type: "file",
+    id: await mpSha1(path),
+    subject: mpCanon(parts.length > 1 ? parts[0] : "其他"),
+    folder: parts.length > 1 ? parts.slice(1, -1).join("/") : "",
+    name: mpStem(fileName),
+    ext: mpExt(fileName),
+    size: opt.size ?? 0,
+    updated: t.date,
+    ts: t.ts,
+    path,
+    urls: opt.release ? { dl: opt.url } : mpUrls(path, opt.size ?? 0),
+  };
+}
+// 依据本次提交的 changes 增量生成新清单；无法安全推算时返回 null（Actions 全量重建兜底）
+async function mpPatch(changes) {
+  if (!MANIFEST?.items || !MANIFEST.subjects) return null;
+  const m = JSON.parse(JSON.stringify(MANIFEST));
+  m.items = m.items || [];
+  m.subjects = m.subjects || {};
+  let dirSet = new Set(m.dirs || []);
+  const addAncestors = (p) => { const ps = p.split("/"); for (let i = 1; i < ps.length; i++) dirSet.add(ps.slice(0, i).join("/")); };
+  const addDir = (d) => { const ps = d.split("/"); for (let i = 1; i <= ps.length; i++) dirSet.add(ps.slice(0, i).join("/")); }; // 目录自身+祖先（.gitkeep/空目录用）
+  const itemAt = (path) => m.items.find((x) => x.type === "file" && x.path === path);
+  for (const ch of changes) {
+    if (ch.op === "put") {
+      if (ch.path === ".scripts/release-assets.json") { // Release 映射变更 → 同步 dl 通道条目
+        let map;
+        try { map = JSON.parse(mpB64Text(ch.content)); } catch (e) { continue; }
+        const paths = new Set(Object.keys(map));
+        m.items = m.items.filter((x) => !(x.type === "file" && x.urls?.dl && !x.urls?.raw && !paths.has(x.path)));
+        for (const rel of Object.keys(map)) {
+          const meta = map[rel], url = typeof meta === "string" ? meta : meta.url;
+          const ex = itemAt(rel);
+          if (ex) { ex.urls = { dl: url }; if (meta && typeof meta === "object" && meta.size) ex.size = meta.size; }
+          else m.items.push(await mpSkeleton(rel, { release: true, url, size: (meta && typeof meta === "object" && meta.size) || 0 }));
+          addAncestors(rel);
+        }
+        continue;
+      }
+      if (!mpIsResource(ch.path)) {
+        if (ch.path.endsWith("/.gitkeep")) addDir(ch.path.slice(0, -"/.gitkeep".length)); // 新建文件夹
+        continue;
+      }
+      const ex = itemAt(ch.path);
+      const e = await mpSkeleton(ch.path, { size: ch.size ?? 0, mtime: ch.mtime });
+      const sib = m.items.find((x) => x.type === "file" && x !== ex && x.subject === e.subject && (x.folder || "") === e.folder && x.note);
+      if (sib) e.note = sib.note; // 目录级 _note.json 说明：借用同目录现有条目
+      else if (ex?.note) e.note = ex.note; // 原位替换：保留原条目注释
+      if (ex) Object.assign(ex, e); else m.items.push(e);
+      addAncestors(ch.path);
+    } else if (ch.op === "rm") {
+      if (!mpIsResource(ch.path)) {
+        if (ch.path.endsWith("/.gitkeep")) { // 目录被清空且占位符也删了 → 从目录清单移除
+          const d = ch.path.slice(0, -"/.gitkeep".length);
+          if (!m.items.some((x) => x.type === "file" && x.path.startsWith(d + "/"))) dirSet.delete(d);
+        }
+        continue;
+      }
+      const ex = itemAt(ch.path);
+      if (ex) m.items.splice(m.items.indexOf(ex), 1);
+    } else if (ch.op === "mv") {
+      const ex = itemAt(ch.from);
+      if (ex) {
+        const e = await mpSkeleton(ch.to, { size: ex.size, mtime: ex.ts ? ex.ts * 1000 : undefined });
+        if (ex.note) e.note = ex.note;
+        Object.assign(ex, e);
+        addAncestors(ch.to);
+      } else if (ch.from.endsWith("/.gitkeep") && ch.to.endsWith("/.gitkeep")) { // 空目录改名/移动：重映射目录清单
+        const a = ch.from.slice(0, -"/.gitkeep".length), b = ch.to.slice(0, -"/.gitkeep".length);
+        dirSet = new Set([...dirSet].map((d) => (d === a ? b : d.startsWith(a + "/") ? b + d.slice(a.length) : d)));
+      }
+    }
+  }
+  m.items.sort((x, y) => (y.ts || 0) - (x.ts || 0));
+  for (const it of m.items) { // 新科目补默认元数据（对齐 Python 规则）
+    if (!m.subjects[it.subject]) {
+      const meta = MP_SUBJECT_META[it.subject];
+      m.subjects[it.subject] = { py: meta ? meta[0] : it.subject.slice(0, 4).toLowerCase(), icon: meta ? meta[1] : (it.type === "link" ? "🎬" : it.type === "book" ? "📚" : "📁"), count: 0 };
+    }
+  }
+  for (const s of Object.keys(m.subjects)) m.subjects[s].count = m.items.filter((x) => x.subject === s).length;
+  m.dirs = [...dirSet].sort();
+  const t = mpCn();
+  m.generated = `${t.date} ${t.time}`;
+  return m;
+}
+/* __MP_END__ */
+
 // Git Data API：把一批变更（上传/替换/移动/删除）打包成单个 commit，避免逐文件提交
 // change: {op:"put", path, content(b64)} | {op:"rm", path} | {op:"mv", from, to}
 // dest: 提交目标，默认本仓库 main；投稿模式传 {repo:"用户名/study-resources", branch:"submit-xxx"}
 // 远端 main 在读取 HEAD 与写入之间被并发推进（如 Actions 重建索引）时会 422
 // "not a fast forward"，此处自动重读 HEAD 重试（blob sha 内容寻址，可直接复用）
 async function commitChanges(changes, message, dest = { repo: REPO, branch: "main" }) {
+  // 直改本仓库 main 时：同一 commit 附带打完补丁的最新索引 → 本页提交成功即 0 秒生效
+  let patched = null;
+  if (dest.repo === REPO && dest.branch === "main" && MANIFEST?.items && !changes.some((c) => c.path === ".site/manifest.json")) {
+    try {
+      patched = await mpPatch(changes);
+      if (patched) changes = changes.concat([{ op: "put", path: ".site/manifest.json", content: mpB64(JSON.stringify(patched)) }]);
+    } catch (e) { console.warn("清单即时补丁失败（不影响本次提交）", e); patched = null; }
+  }
   for (let attempt = 1; ; attempt++) {
     const ref = await ghApi(`/repos/${dest.repo}/git/ref/heads/${dest.branch}`);
     const head = await ghApi(`/repos/${dest.repo}/git/commits/${ref.object.sha}`);
@@ -1072,6 +1263,7 @@ async function commitChanges(changes, message, dest = { repo: REPO, branch: "mai
     const nc = await ghApi(`/repos/${dest.repo}/git/commits`, { method: "POST", body: { message, tree: nt.sha, parents: [ref.object.sha] } });
     try {
       await ghApi(`/repos/${dest.repo}/git/refs/heads/${dest.branch}`, { method: "PATCH", body: { sha: nc.sha } });
+      if (patched) { try { applyManifestData(patched); } catch (e) { console.warn(e); } }
       return nc.sha;
     } catch (e) {
       // HEAD 被并发推进：基于最新 HEAD 重来，最多 3 次
@@ -1643,7 +1835,7 @@ async function fmDoMove(items, dest, rename) {
     log(`⇄ 移动 ${changes.length} 个文件（单 commit）…`, "#fmLog");
     for (const c of changes) c.sha = tm[c.from];
     await commitChanges(changes, `move: ${changes.length} 个文件${dest ? " → " + dest : " → 根目录"}`);
-    log(`✔ 移动完成，索引重建约 1 分钟`, "#fmLog");
+    log(`✔ 移动完成，本页已即时更新，其他访客约 1-2 分钟内生效`, "#fmLog");
     fmSel.clear();
     renderFm();
   } catch (e) { log("✗ " + e.message, "#fmLog"); }
@@ -1655,13 +1847,13 @@ async function fmUploadFiles(files, base) {
   if (!CAN_WRITE) return log("✗ 投稿模式请在「上传/投稿」标签操作", "#fmLog");
   const dir = base !== undefined ? base : [fmState.subject, fmState.folder].filter(Boolean).join("/");
   const changes = [];
-  for (const f of files) changes.push({ op: "put", path: (dir ? dir + "/" : "") + f.name, content: await fileB64(f) });
+  for (const f of files) changes.push({ op: "put", path: (dir ? dir + "/" : "") + f.name, content: await fileB64(f), size: f.size, mtime: f.lastModified });
   const conflicts = changes.filter((c) => MANIFEST?.items?.some((x) => x.path === c.path));
   if (conflicts.length && !confirm(`以下 ${conflicts.length} 个文件已存在，将被覆盖：\n${conflicts.map((c) => c.path).join("\n")}`)) return;
   try {
     log(`⬆ 上传 ${changes.length} 个文件到 ${dir || "根目录"}（单 commit）…`, "#fmLog");
     await commitChanges(changes, `upload: ${changes.length} 个文件到 ${dir || "根目录"}`);
-    log("✔ 上传成功，索引重建约 1 分钟", "#fmLog");
+    log("✔ 上传成功，本页已即时更新，其他访客约 1-2 分钟内生效", "#fmLog");
     renderFm();
   } catch (e) { log("✗ " + e.message, "#fmLog"); }
 }
@@ -1684,7 +1876,7 @@ function fmNewFolderAt(base) {
 async function mkdir(rel, sel = "#fmLog") {
   try {
     await commitChanges([{ op: "put", path: `${rel}/.gitkeep`, content: "" }], `mkdir: ${rel}`);
-    log(`✔ 已创建 ${rel}/，索引重建约 1 分钟`, sel);
+    log(`✔ 已创建 ${rel}/，本页已即时更新`, sel);
     renderFm();
   } catch (e) { log("✗ " + e.message, sel); }
 }
@@ -1724,7 +1916,7 @@ async function fmDeleteItems(items) {
     }
     if (map) await saveReleaseMap(map, `release: 删除 ${dlItems.length} 个附件`);
     if (gitChanges.length) await commitChanges(gitChanges, `delete: ${gitChanges.length} 个文件`);
-    log(`✔ 已删除 ${all.length} 个文件，索引重建约 1 分钟`, "#fmLog");
+    log(`✔ 已删除 ${all.length} 个文件，本页已即时更新，其他访客约 1-2 分钟内生效`, "#fmLog");
     fmSel.clear();
     renderFm();
   } catch (e) { log("✗ " + e.message, "#fmLog"); }
@@ -1752,10 +1944,10 @@ $("#fmFile").onchange = async (e) => {
         ? up.browser_download_url
         : { ...info.meta, url: up.browser_download_url, size: up.size };
       await saveReleaseMap(info.map, `release: 替换 ${it.path}`);
-      log("✔ Release 附件已替换，索引重建约 1 分钟", "#fmLog");
+      log("✔ Release 附件已替换，本页已即时更新，其他访客约 1-2 分钟内生效", "#fmLog");
     } else {
-      await commitChanges([{ op: "put", path: it.path, content: await fileB64(f) }], `update: ${it.path}`);
-      log(`✔ 替换成功，索引重建约 1 分钟`, "#fmLog");
+      await commitChanges([{ op: "put", path: it.path, content: await fileB64(f), size: f.size, mtime: f.lastModified }], `update: ${it.path}`);
+      log(`✔ 替换成功，本页已即时更新，其他访客约 1-2 分钟内生效`, "#fmLog");
     }
     renderFm();
   } catch (e) { log("✗ " + e.message, "#fmLog"); }
@@ -1807,7 +1999,7 @@ $("#mvOk").onclick = async () => {
         delete info.map[it.path];
         info.map[to] = typeof info.meta === "string" ? url : { ...info.meta, url };
         await saveReleaseMap(info.map, `release: ${it.path} 改名为 ${name}`);
-        log("✔ Release 附件已改名并更新映射，索引重建约 1 分钟", "#fmLog");
+        log("✔ Release 附件已改名并更新映射，本页已即时更新，其他访客约 1-2 分钟内生效", "#fmLog");
         $("#moveModal").hidden = true;
         renderFm();
         return;
@@ -1911,7 +2103,7 @@ $("#upBtn").onclick = async () => {
   const sub = relOf($("#upSub").value);
   const base = `${subject}${sub ? "/" + sub : ""}/`;
   const changes = [];
-  for (const { f, rel } of upQueue) changes.push({ op: "put", path: base + rel, content: await fileB64(f) });
+  for (const { f, rel } of upQueue) changes.push({ op: "put", path: base + rel, content: await fileB64(f), size: f.size, mtime: f.lastModified });
   const conflicts = changes.filter((c) => MANIFEST?.items?.some((x) => x.path === c.path));
   if (conflicts.length && !confirm(`以下 ${conflicts.length} 个文件已存在，将被覆盖：\n${conflicts.map((c) => c.path).join("\n")}`)) return;
   try {
@@ -1919,7 +2111,7 @@ $("#upBtn").onclick = async () => {
     if (CAN_WRITE) {
       log(`⬆ 打包上传 ${changes.length} 个文件（单 commit）…`, "#upLog");
       await commitChanges(changes, `upload: ${changes.length} 个文件到 ${base}`);
-      log("✔ 上传成功，索引重建约 1 分钟后生效", "#upLog");
+      log("✔ 上传成功，本页已即时更新，其他访客约 1-2 分钟内生效", "#upLog");
     } else {
       log(`⬆ 打包投稿 ${changes.length} 个文件（自动 Fork + PR）…`, "#upLog");
       const dest = await ensureForkAndBranch("#upLog");
