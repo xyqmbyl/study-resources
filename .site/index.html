@@ -144,16 +144,16 @@
 
 <!-- 移动/改名弹层 -->
 <div id="moveModal" class="modal" hidden>
-  <div class="modal-box" style="width:min(520px,94vw)">
-    <button class="modal-close" onclick="document.getElementById('moveModal').hidden=true">✕</button>
-    <h3 style="margin:6px 8px 14px">移动 / 改名</h3>
-    <p class="admin-hint" id="mvFrom" style="margin-bottom:12px"></p>
-    <label style="font-size:12px;color:var(--ink2)">目标科目</label>
+  <div class="modal-box form-box">
+    <button class="modal-close" onclick="document.getElementById('moveModal').hidden=true" aria-label="关闭">✕</button>
+    <h3>移动 / 改名</h3>
+    <p class="form-hint" id="mvFrom"></p>
+    <label for="mvSubject">目标科目</label>
     <select id="mvSubject"></select>
-    <label style="font-size:12px;color:var(--ink2)">子文件夹（可选）</label>
+    <label for="mvSub">子文件夹（可选）</label>
     <input id="mvSub" list="folderList" placeholder="例：2026真题">
     <div id="mvNameRow">
-      <label style="font-size:12px;color:var(--ink2)">文件名（含扩展名）</label>
+      <label for="mvName">文件名（含扩展名）</label>
       <input id="mvName">
     </div>
     <button id="mvOk" class="btn primary">确定移动</button>
@@ -163,11 +163,11 @@
 
 <!-- 新建文件夹弹层（页面内弹窗：Edge 等拦截脚本对话框时 prompt 会静默失败，故不用原生对话框） -->
 <div id="folderModal" class="modal" hidden>
-  <div class="modal-box" style="width:min(460px,94vw)">
-    <button class="modal-close" onclick="document.getElementById('folderModal').hidden=true">✕</button>
+  <div class="modal-box form-box">
+    <button class="modal-close" onclick="document.getElementById('folderModal').hidden=true" aria-label="关闭">✕</button>
     <h3>新建文件夹</h3>
-    <p class="admin-hint" id="fdBase" style="margin-bottom:12px"></p>
-    <label style="font-size:12px;color:var(--ink2)">文件夹名称（不含 /）</label>
+    <p class="form-hint" id="fdBase"></p>
+    <label for="fdName">文件夹名称（不含 /）</label>
     <input id="fdName" placeholder="例：2026期末真题">
     <button id="fdOk" class="btn primary">创建</button>
     <div id="fdLog" class="log"></div>

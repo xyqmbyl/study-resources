@@ -183,8 +183,24 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .modal-box { position: relative; width: min(920px, 96vw); max-height: min(86vh, 100%); overflow-y: auto; overscroll-behavior: contain; background: var(--card); border-radius: 16px; padding: 12px; }
 #videoFrame { aspect-ratio: 16/9; }
 #videoFrame iframe { width: 100%; height: 100%; border: 0; border-radius: 10px; }
-.modal-close { position: absolute; top: -14px; right: -14px; width: 32px; height: 32px; border-radius: 50%;
-  border: none; background: var(--ink); color: var(--bg); cursor: pointer; font-size: 14px; }
+.modal-close { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border-radius: 50%;
+  border: none; background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink2);
+  cursor: pointer; font-size: 13px; line-height: 28px; padding: 0;
+  transition: background .15s ease, color .15s ease; }
+.modal-close:hover { background: var(--ink); color: var(--bg); }
+
+/* 小型表单弹层（新建文件夹等）：与 .admin-card 同语言的纸感学术风 */
+.modal-box.form-box { width: min(440px, 94vw); padding: 22px 24px 20px; }
+.form-box h3 { font-family: var(--serif); font-size: 18px; font-weight: 700; margin: 0 40px 4px 0; letter-spacing: .5px; }
+.form-box .form-hint { color: var(--ink2); font-size: 13px; margin-bottom: 6px; }
+.form-box label { display: block; font-size: 12px; color: var(--ink2); margin: 16px 0 6px; }
+.form-box input, .form-box select { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--bg2); color: var(--ink); font-size: 14px; transition: border-color .15s ease, box-shadow .15s ease; }
+.form-box select { cursor: pointer; }
+.form-box input::placeholder { color: color-mix(in srgb, var(--ink2) 55%, transparent); }
+.form-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.form-box .btn.primary { width: 100%; margin-top: 16px; padding: 11px; border-radius: 10px; font-weight: 600; font-size: 14px; }
+.form-box .log { margin-top: 10px; min-height: 0; }
 
 /* 文档在线预览弹层（PDF/Word/PPT） */
 .modal-box.preview-box { width: min(1100px, 96vw); height: min(88vh, 92vh); max-height: none; overflow: hidden;
