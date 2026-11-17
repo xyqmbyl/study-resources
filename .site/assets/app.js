@@ -689,7 +689,7 @@ function fileCard(it) {
       <div class="card-title">${hl(it.name)}</div>
     </div>
     ${it.note ? `<div class="card-note">${hl(it.note)}</div>` : ""}
-    <div class="card-meta"><span>${esc(it.folder || it.subject)}</span><span${big ? ` class="ft-big" title="大文件，经备用线路下载，耗时长属正常现象"` : ""}>${big ? "⚠ " : ""}${fmtSize(it.size || 0)}</span><span>${esc(it.updated || "")}</span></div>
+    <div class="card-meta"><span>${esc(it.folder || it.subject)}</span><span${big ? ` class="ft-big" title="大文件，经备用线路下载，耗时长属正常现象"` : ""}>${big ? "⚠ " : ""}${fmtSize(it.size || 0)}</span></div>
     <div class="card-actions">
       <a class="btn-dl" href="${esc(dl)}" ${dlAttrs}>⬇ 下载</a>
       ${read}
