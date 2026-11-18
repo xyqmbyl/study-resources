@@ -45,7 +45,6 @@ SUBJECT_ALIASES = {
     "C": "C语言",
     "计算机网络": "计算机网络(计科)",
     "软件工程": "软件工程(计科)",
-    "大学物理": "其他",
 }
 
 def canon_subject(name: str) -> str:
