@@ -1,4 +1,35 @@
-/* ===== CSU 学习资源库 · 纸感学术风 ===== */
+/* ============================================================================
+ * CSU 学习资源库 · 样式表（style.css）——“纸感学术风”主题
+ * ----------------------------------------------------------------------------
+ * 这个文件控制网站“长什么样”：配色、字体、间距、卡片、弹窗、手机端布局等。
+ * 所有页面的结构（HTML）由 index.html 定义，行为（点击/搜索等）由 app.js 定义，
+ * 本文件只负责外观。
+ *
+ * 想读懂它，建议按下面这份“目录”从上往下看，每块开头都有中文说明：
+ *
+ *   A) 主题色变量（:root 亮色 / [data-theme="dark"] 暗色）—— 全站颜色都取自这里
+ *   B) 全局基础（盒模型、隐藏技巧、键盘焦点、滚动条）
+ *   C) 壁纸背景层（#wallpaper）
+ *   D) 顶栏 .topbar（站名 / 主题 / 壁纸 / 更多菜单）
+ *   E) 首页头部 .hero（大标题 + 搜索框 + 统计）
+ *   F) 类型筛选 .chips
+ *   G) 主体两栏 .layout（侧栏 + 分隔条 + 内容）
+ *   H) 侧栏目录树 .subj-item / 面包屑 .crumb
+ *   I) 资料卡片 .card（含各文件类型色块 .ft-*、骨架屏 .skeleton）
+ *   J) 各种弹层 .modal（视频 / 预览 / 表单 / 帮助）
+ *   K) 回到顶部、跳转主内容等小部件
+ *   L) 管理台 / 文件管理器 / 上传
+ *   M) 手机端媒体查询 @media（≤860px 侧栏变抽屉、≤640px 顶栏收起为 ⋮ 菜单）
+ *   N) 无障碍：prefers-reduced-motion 减少动画
+ *
+ * 三个通用概念先记住：
+ *   · “CSS 变量”（--bg / --accent 等）把颜色集中定义在 :root，改一处全站生效；
+ *     暗色模式 [data-theme="dark"] 只是把这些变量换一套值。
+ *   · Grid/Flex 是两种排版方式：Grid 适合网格（如卡片墙），Flex 适合一行/一列排开。
+ *   · @media 是“条件样式”：屏幕宽度小于某个值时启用另一套规则（做手机适配的关键）。
+ * ========================================================================== */
+
+/* ===== A) 主题色变量：亮色（默认） ===== */
 :root {
   --bg: #faf8f4; --bg2: #f3efe7; --card: #ffffff; --ink: #1c1a17; --ink2: #6b6459;
   --line: #e6e0d4; --accent: #b4552d; --accent2: #2d6e5f; --radius: 14px;
@@ -9,10 +40,13 @@
   --bg: #171512; --bg2: #1f1c18; --card: #232019; --ink: #ece7dc; --ink2: #9a9284;
   --line: #35302a; --accent: #e0784d; --accent2: #5cb89e;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
-[hidden] { display: none !important; }
 
-/* 键盘焦点可见性：全局 :focus-visible 2px 描边（鼠标点击不触发，仅键盘导航显示） */
+/* ===== B) 全局基础：盒模型统一、隐藏技巧、键盘焦点、滚动条 ===== */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; } /* 元素带 hidden 属性就彻底不显示（JS 用它开关弹层） */
+
+/* 键盘焦点可见性：全局 :focus-visible 2px 描边（鼠标点击不触发，仅键盘导航显示）
+   —— 无障碍要求：用 Tab 键操作时，必须能看出当前焦点落在哪个按钮/链接上 */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 a:focus-visible, .btn:focus-visible, .chip:focus-visible, .subj-item:focus-visible,
 .tab:focus-visible, .icon-btn:focus-visible, .gh-link:focus-visible, .menu-btn:focus-visible,
@@ -28,8 +62,9 @@ a:focus-visible, .btn:focus-visible, .chip:focus-visible, .subj-item:focus-visib
   border: 2px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background: var(--accent); border-color: transparent; }
 ::-webkit-scrollbar-corner { background: transparent; }
-[hidden] { display: none !important; }
+[hidden] { display: none !important; } /* 与上面第 46 行重复，历史遗留；删任意一条都不影响效果 */
 
+/* ===== C) 壁纸背景层（固定铺满全屏、低透明度，卡片不透明所以不影响可读性） ===== */
 /* 壁纸背景层：固定置底、低透明度，卡片均不透明，不影响任何排版与可读性 */
 #wallpaper { position: fixed; inset: 0; z-index: -1; background-size: cover; background-position: center;
   opacity: .18; pointer-events: none; }
@@ -37,6 +72,7 @@ a:focus-visible, .btn:focus-visible, .chip:focus-visible, .subj-item:focus-visib
 html { scroll-behavior: smooth; }
 body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.6; transition: background .3s; }
 
+/* ===== D) 顶栏 .topbar（吸顶、毛玻璃；右侧一组主题/壁纸/管理台按钮） ===== */
 /* 顶栏 */
 .topbar { position: sticky; top: 0; z-index: 50; display: flex; justify-content: space-between; align-items: center;
   padding: 12px 28px; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); background: color-mix(in srgb, var(--bg) 82%, transparent);
@@ -52,6 +88,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .gh-link { color: var(--ink2); text-decoration: none; font-size: 13px; border: 1px solid var(--line); border-radius: 10px; padding: 5px 10px; background: none; cursor: pointer; font-family: inherit; }
 .gh-link:hover { color: var(--accent); border-color: var(--accent); }
 
+/* ===== E) 首页头部 .hero（居中大标题 + 圆角搜索框 + Ctrl K 提示 + 结果统计） ===== */
 /* Hero */
 .hero { max-width: 860px; margin: 0 auto; padding: 40px 24px 12px; text-align: center; }
 .hero-kicker { color: var(--accent2); font-size: 13px; letter-spacing: 4px; }
@@ -74,6 +111,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .hero-meta { margin-top: 16px; color: var(--ink2); font-size: 13px; }
 .hero-meta b { color: var(--accent); }
 
+/* ===== F) 类型筛选 .chips（全部 / 文件 / 视频课程 / 电子书 的胶囊按钮） ===== */
 /* 类型筛选 chips */
 .chips { display: flex; gap: 10px; justify-content: center; margin: 18px 0 8px; flex-wrap: wrap; }
 .chip { border: 1px solid var(--line); background: var(--card); color: var(--ink2); border-radius: 999px;
@@ -81,6 +119,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .chip:hover { border-color: var(--accent); }
 .chip.active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 
+/* ===== G) 主体两栏 .layout：左=侧栏（宽度由 CSS 变量 --sbw 控制），中=分隔条，右=内容 ===== */
 /* 主体两栏 */
 .layout { display: grid; grid-template-columns: var(--sbw, 230px) 14px 1fr; max-width: 1440px; margin: 26px auto 60px; padding: 0 24px; }
 .sidebar { position: sticky; top: 72px; align-self: start; max-height: calc(100vh - 90px); overflow: auto; }
@@ -90,8 +129,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .splitter { cursor: col-resize; display: flex; align-items: center; justify-content: center; touch-action: none; user-select: none; }
 .splitter::before { content: ""; width: 4px; height: 64px; border-radius: 4px; background: var(--line); transition: all .15s; }
 .splitter:hover::before, .splitter.dragging::before { height: 120px; background: var(--accent); }
-/* 导航自定义弹窗列表 */
-/* 导航自定义弹窗列表 */
+/* 导航自定义弹窗里的科目列表（勾选显隐 + 拖拽排序；.off=已隐藏，.dragging=正在拖动） */
 .navcust-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 10px; border-bottom: 1px solid var(--line); background: var(--card); user-select: none; }
 .navcust-row:last-child { border-bottom: none; }
 .navcust-row.off label { opacity: .45; text-decoration: line-through; }
@@ -106,6 +144,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
   box-shadow: 0 2px 10px rgba(0,0,0,.05); }
 .subj-item .cnt { margin-left: auto; font-size: 11px; color: var(--ink2); background: var(--bg2); padding: 0 7px; border-radius: 8px; }
 
+/* ===== H) 侧栏目录树 .subj-item / 展开箭头 .tw / 面包屑 .crumb ===== */
 /* 多级目录树 */
 .subj-item.tree { color: var(--ink2); }
 .subj-item .tw { flex: none; width: 13px; text-align: center; font-size: 10px; color: var(--ink2); transition: transform .15s; user-select: none; }
@@ -118,6 +157,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .crumb a:last-child { color: var(--accent); }
 .crumb i { font-style: normal; opacity: .45; }
 
+/* ===== I) 资料卡片 .card：分组标题、卡片网格、文件类型色块 .ft-*、骨架屏 .skeleton ===== */
 /* 分组与卡片 */
 .group-title { font-family: var(--serif); font-size: 19px; font-weight: 700; margin: 30px 0 12px; display: flex; align-items: center; gap: 8px; }
 .group-title small { color: var(--ink2); font-weight: 400; font-size: 12px; }
@@ -161,7 +201,8 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 
 .empty { text-align: center; color: var(--ink2); padding: 70px 0; font-size: 15px; }
 
-/* 加载占位骨架屏（契约：.skeleton 容器 + .sk-card 卡 + .sk-line 条，shimmer 动画） */
+/* 加载占位骨架屏（契约：.skeleton 容器 + .sk-card 卡 + .sk-line 条，shimmer 动画）
+   —— 数据还没到时先显示的灰色“假卡片”，让加载过程不显得空白 */
 .skeleton { display: grid; gap: 14px; }
 .sk-card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
   padding: 15px 16px; display: flex; flex-direction: column; gap: 10px; }
@@ -178,6 +219,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .card.link-card .card-title { color: var(--ink); }
 .play-hint { font-size: 12px; color: #b93b5d; } /* 对卡片底 ≈4.8:1（原 #fb7299 ≈2.3:1 不达标） */
 
+/* ===== J) 弹层 .modal：半透明遮罩 + 居中白盒；含视频 / 文档预览 / 表单 / 使用说明 ===== */
 /* 弹层 */
 .modal { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 20px; }
 .modal-box { position: relative; width: min(920px, 96vw); max-height: min(86vh, 100%); overflow-y: auto; overscroll-behavior: contain; background: var(--card); border-radius: 16px; padding: 12px; }
@@ -217,6 +259,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
   .preview-tools a { font-size: 12px; }
 }
 
+/* ===== K) 回到顶部、跳转主内容、抽屉遮罩等小部件 ===== */
 /* 回到顶部圆钮（契约：固定右下、圆形半透明；默认隐藏，.show 淡入；z-index 60 低于 modal 100） */
 .back-top { position: fixed; right: 18px; bottom: 18px; width: 46px; height: 46px; border-radius: 50%;
   border: 1px solid var(--line); background: color-mix(in srgb, var(--card) 78%, transparent);
@@ -239,6 +282,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
   opacity: 0; pointer-events: none; transition: opacity .25s ease; }
 .drawer-mask.show, .drawer-mask.open { opacity: 1; pointer-events: auto; }
 
+/* ===== L) 管理台 / 文件管理器 / 上传（#admin 页面专用样式） ===== */
 /* 管理页 */
 .admin-box { max-width: 760px; margin: 60px auto; padding: 32px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; }
 .admin-box h2 { font-family: var(--serif); margin-bottom: 8px; }
@@ -262,6 +306,7 @@ body { background: var(--bg); color: var(--ink); font-family: var(--sans); line-
 .footer a:hover { color: var(--accent); } /* ≈4.6:1（深色 #e0784d ≈6.0:1） */
 .footer-sub { display: block; margin-top: 6px; font-size: 11.5px; color: var(--ink2); } /* ≈5.5:1 达标 */
 
+/* ===== M) 手机端媒体查询：≤860px 侧栏变抽屉、≤640px 顶栏收成 ⋮ 菜单 ===== */
 /* 移动端 */
 .search-stat { color: var(--ink2); font-size: 13px; margin-bottom: 14px; }
 .card-note { font-size: 12.5px; color: var(--ink2); line-height: 1.5; word-break: break-all; }
@@ -447,6 +492,7 @@ body.in-admin #menuBtn, body.in-admin #navCustomBtn { display: none; }
 .admin-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .admin-head h2 { margin: 0; }
 
+/* ===== N) 无障碍：用户系统开启“减少动画”时，全站动画/过渡归零 ===== */
 /* 无障碍：用户偏好减少动画 —— 全局动画/过渡归零、滚动不再平滑 */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

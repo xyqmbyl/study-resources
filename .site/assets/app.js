@@ -1,27 +1,86 @@
-/* ===== CSU 学习资源库 · 前端逻辑 ===== */
+/* ============================================================================
+ * CSU 学习资源库 · 前端逻辑（app.js）
+ * ----------------------------------------------------------------------------
+ * 这个文件负责网站首页的所有“活起来”的部分：搜索、筛选、目录树、卡片渲染、
+ * 在线预览、下载、主题/壁纸，以及藏在 #admin 里的“管理台”（用 GitHub Token
+ * 上传/替换/移动/删除资料，或给没有权限的同学自动 Fork + 提 PR 投稿）。
+ *
+ * 想读懂它，建议按下面这份“目录”从上往下看，每个小节开头都有中文说明：
+ *
+ *   1) 顶部常量与通用小工具 ................ REPO / $(选择器) / state / 转义 / 大文件也要看
+ *   2) 主题（深浅色） .................... initTheme / applyTheme
+ *   3) 壁纸（内置 3 张 + 自定义图） ........ IndexedDB 存自定义图
+ *   4) 加载与索引（拉 manifest.json） ...... loadManifest / applyManifestData
+ *   5) 类型筛选 chips .................... 全部 / 文件 / 视频 / 电子书
+ *   6) 导航自定义（顺序 + 隐藏科目） ....... 只存在本浏览器
+ *   7) 侧栏多级目录树 .................... buildTree / renderSidebar
+ *   8) 导航自定义弹窗 .................... 拖拽排序
+ *   9) 侧栏宽度拖拽分隔条 ................. 存本浏览器
+ *  10) 列表渲染 ......................... render / cardHTML / 分批加载
+ *  11) 搜索（中文拆词 + 别名 + Fuse 兜底） . smartSearch
+ *  12) 关键词高亮 ....................... hl
+ *  13) 视频弹层 ......................... openVideo / closeModal
+ *  14) 文档在线预览（PDF/Word/PPT） ........ openPreview
+ *  15) pdf.js 兜底（Safari/iOS 专属路径） ... renderPdfJs / openBlobPreview
+ *  16) 路由（#admin 与 #q=... 深链） ....... route / syncHash
+ *  17) 移动端抽屉 / 回到顶部 / 搜索清空 ...... closeDrawer / backTop
+ *  18) 管理台总入口与 GitHub API 封装 ....... TOKEN / ghApi / CAN_WRITE
+ *  19) 【重要】manifest 即时补丁块 ......... __MP_BEGIN__ ～ __MP_END__（与 Python 同步）
+ *  20) 批量提交 commitChanges（Git Data API）
+ *  21) 投稿模式（自动 Fork + PR） .......... ensureForkAndBranch
+ *  22) 登录 / 权限 / 标签页 ................ enterAdmin
+ *  23) 文件管理器（Windows 式多选/拖拽/框选/右键）
+ *  24) 删除 / 替换 / 移动改名 / Release 大文件
+ *  25) 上传 / 投稿 / 新建文件夹
+ *  26) 刷新保持界面状态（sessionStorage） ... saveUI
+ *  27) 启动流程 + 触摸诊断模式(?debug=touch) . route / loadManifest
+ *
+ * 几个全局约定先记住，后面就不会迷路：
+ *   · REPO 是仓库全名 “用户名/仓库名”，所有 GitHub API / 下载链接都基于它拼出来。
+ *   · $ 是 document.querySelector 的简写，$("#foo") 就是找 id 为 foo 的元素。
+ *   · MANIFEST 是整站的核心数据（服务器上的 manifest.json 解析而来），
+ *     里面 items 是全部资料条目，subjects 是科目清单等；很多函数都围绕它工作。
+ *   · state 记录“当前界面状态”（搜什么词、选了哪个目录、筛了什么类型…）。
+ * ========================================================================== */
+
 const REPO = "xyqmbyl/study-resources";
+/* ---------- 1) 通用小工具 ---------- */
+
+// $ 是选择器简写：$("#id") 找元素，等价于 document.querySelector("#id")
 const $ = (sel) => document.querySelector(sel);
+// state 记录“当前页面在看什么”：type=类型筛选，folder=选中的目录，q=搜索词，
+// open=目录树里展开了哪些层级（用 Set 存，去重）
 const state = { type: "all", folder: "", q: "", open: new Set() };
+// 三个全局缓存：MANIFEST=全站索引数据；FUSE=模糊搜索器；TREE=侧栏目录树结构
 let MANIFEST = null, FUSE = null, TREE = null;
 
-// 顶级科目：文件取路径首段（兼容旧 manifest 的 subject=父文件夹名），链接/书用 subject 字段
+// 取“顶级科目”：普通文件看路径第一段（如 "高数/真题/a.pdf" → "高数"）；
+// 链接/电子书没有路径，直接用它的 subject 字段（没有就归到“其他”）
 const topOf = (it) => (it.type === "file" && it.path ? it.path.split("/")[0] : it.subject || "其他");
+// 判断某条资料是否位于 folder 目录之下（含它自己那一层）：
+// 文件用路径前缀判断；“其他”特指根目录下没有斜杠的散落文件；链接/电子书只有顶级科目能匹配
 const underFolder = (it, folder) =>
   it.type === "file" && it.path
     ? it.path === folder || it.path.startsWith(folder + "/") || (folder === "其他" && !it.path.includes("/"))
     : !folder.includes("/") && topOf(it) === folder;
 
+// 四种“类型筛选”的显示名（key 用于判断，value 是按钮上的中文）
 const typeNames = { all: "全部", file: "文件", link: "视频课程", book: "电子书" };
+// 按文件扩展名给卡片左上角的“类型小方块”分配颜色类名（对应 style.css 里的 .ft-pdf 等）
 const extColor = (ext) => ({
   pdf: "ft-pdf", ppt: "ft-ppt", pptx: "ft-ppt", doc: "ft-doc", docx: "ft-doc",
   xls: "ft-xls", xlsx: "ft-xls", zip: "ft-zip", rar: "ft-zip", "7z": "ft-zip",
   svg: "ft-img", png: "ft-img", jpg: "ft-img",
 }[ext] || "ft-misc");
 
+// esc：把用户/文件名里的 & < > " 转成 HTML 实体，防止拼进 innerHTML 时被当成标签（安全必备）
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// fmtSize：把字节数变成好读的 “1.2 MB / 340 KB / 12 B”
 const fmtSize = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : n > 1024 ? (n / 1024).toFixed(0) + " KB" : n + " B");
 
-/* ---------- 主题 ---------- */
+/* ---------- 2) 主题（深浅色） ---------- */
+// 主题只改 <html data-theme="dark|light"> 一个属性，颜色全由 style.css 的 CSS 变量决定。
+// 首次进站：优先用上次选的；没选过就跟随系统（prefers-color-scheme）
 function initTheme() {
   applyTheme(localStorage.getItem("theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
 }
@@ -35,11 +94,14 @@ $("#btnTheme").onclick = () => {
   applyTheme(t);
 };
 
-/* ---------- 壁纸（内置 3 张 + 本地自定义，自定义图压缩后存 IndexedDB） ---------- */
+/* ---------- 3) 壁纸（内置 3 张 + 自定义图，自定义图压缩后存进浏览器 IndexedDB） ---------- */
+// 可选壁纸列表：""=关闭，三个资源路径=内置图，"@custom"=用户自己传的图
 const WALLPAPERS = ["", "assets/wp-1.jpg", "assets/wp-2.jpg", "assets/wp-3.jpg", "@custom"]; // "" = 关闭, "@custom" = 自定义
-const WP_LABELS = ["🖼️", "🖼️ 1", "🖼️ 2", "🖼️ 3", "🖼️ ★"];
-let customWpUrl = "";
+const WP_LABELS = ["🖼️", "🖼️ 1", "🖼️ 2", "🖼️ 3", "🖼️ ★"]; // 按钮上显示的第几套壁纸
+let customWpUrl = ""; // 自定义图的临时对象 URL（只在本次会话有效，图片本体存在 IndexedDB）
 
+// 打开名为 wallpaper 的 IndexedDB 数据库（浏览器自带的本地数据库，适合存图片等大文件）
+// 第一次打开会触发 onupgradeneeded，在里面建一个叫 wp 的对象仓库存图
 function wpDb() {
   return new Promise((res, rej) => {
     const rq = indexedDB.open("wallpaper", 1);
@@ -48,6 +110,7 @@ function wpDb() {
     rq.onerror = () => rej(rq.error);
   });
 }
+// 把自定义壁纸（blob 二进制）写进 IndexedDB 的 "custom" 槽位
 async function saveCustomWp(blob) {
   const db = await wpDb();
   await new Promise((res, rej) => {
@@ -57,6 +120,7 @@ async function saveCustomWp(blob) {
     tx.onerror = () => rej(tx.error);
   });
 }
+// 启动时读取 IndexedDB 里的自定义壁纸，读到就生成一个可用作 CSS 背景的临时 URL
 async function loadCustomWp() {
   try {
     const db = await wpDb();
@@ -69,7 +133,7 @@ async function loadCustomWp() {
   } catch (e) { /* 无痕模式等场景降级为无自定义壁纸 */ }
 }
 
-// 前端压缩：最长边压到 1600px、JPEG q0.75，控制存储体积
+// 前端压缩：最长边压到 1600px、JPEG 质量 0.75，控制 IndexedDB 里的存储体积（原图动辄几 MB）
 function compressWallpaper(file) {
   return new Promise((res, rej) => {
     const img = new Image();
@@ -86,6 +150,7 @@ function compressWallpaper(file) {
   });
 }
 
+// 弹系统选图框；选好后压缩 → 存库 → 立即生效
 function pickWallpaper() {
   const inp = document.createElement("input");
   inp.type = "file";
@@ -105,6 +170,7 @@ function pickWallpaper() {
   inp.click();
 }
 
+// 把当前选中的壁纸实际画到页面背景层 #wallpaper 上，并同步按钮图标/提示
 function applyWallpaper() {
   const i = Math.min(+(localStorage.getItem("wp") || 0), WALLPAPERS.length - 1);
   const el = $("#wallpaper");
@@ -123,7 +189,9 @@ $("#btnWallpaper").onclick = () => {
 };
 $("#btnWallpaper").oncontextmenu = (e) => { e.preventDefault(); pickWallpaper(); }; // 右键随时上传/更换
 
-/* ---------- 加载与索引 ---------- */
+/* ---------- 4) 加载与索引（拉取 manifest.json —— 全站数据的源头） ---------- */
+// manifest.json 是 .scripts/build_manifest.py 生成的索引（含全部资料），CI 每次构建自动重建。
+// 这里带 20 秒超时 + 自动重试一次，避免弱网下永远卡在骨架屏（看起来像“页面动不了”）
 async function loadManifest() {
   // 移动弱网下 fetch 可能长时间挂起：加 20s 超时 + 自动重试一次，避免永远停在骨架屏（骨架页不够一屏高，看起来就像"页面完全动不了"）
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -151,6 +219,7 @@ async function loadManifest() {
 }
 
 // 清单就位后的统一接线（搜索索引/统计/目录树/渲染）——首次加载与管理台即时补丁共用
+// 参数 m：若传入新的清单对象（如管理台刚打完补丁的），就替换当前的 MANIFEST 并让目录树失效重建
 function applyManifestData(m) {
   if (m) { MANIFEST = m; TREE = null; }
   MANIFEST.items.forEach((it) => (it._s = [it.name, it.title, it.subject, it.folder, it.note, it.author, it.py, ...(it.tags || [])].filter(Boolean).join(" ")));
@@ -169,8 +238,8 @@ function applyManifestData(m) {
   if (!$("#tab-fm").hidden) renderFm();
 }
 
-// 同源（Pages 部署版）清单落后仓库超过 10 分钟时（刚在管理台操作完/Actions 排队中），
-// 后台直读仓库 main 的最新清单替换，不阻塞页面；正常访客不受影响，三条线路依次尝试。
+// 同源（即 GitHub Pages 部署版）的清单若比仓库落后超过几分钟（刚在管理台操作完、或 Actions 还在排队），
+// 就在后台直接到仓库 main 分支拉最新的 manifest.json 替换，不阻塞页面；正常访客不受影响，三条加速线路依次尝试。
 async function maybeFastManifest() {
   try {
     if (!MANIFEST?.generated) return;
@@ -195,7 +264,7 @@ async function maybeFastManifest() {
   } catch (e) { /* 静默：同源清单永远是兜底 */ }
 }
 
-/* ---------- 筛选 chips ---------- */
+/* ---------- 5) 类型筛选 chips（全部 / 文件 / 视频课程 / 电子书） ---------- */
 function renderChips() {
   const counts = { all: MANIFEST.items.length, file: 0, link: 0, book: 0 };
   MANIFEST.items.forEach((x) => counts[x.type] !== undefined && counts[x.type]++);
@@ -204,7 +273,8 @@ function renderChips() {
   document.querySelectorAll("#typeChips .chip").forEach((b) => (b.onclick = () => { state.type = b.dataset.t; renderChips(); render(); syncHash(true); }));
 }
 
-/* ---------- 导航自定义（只存本浏览器：顺序 + 隐藏顶级科目） ---------- */
+/* ---------- 6) 导航自定义（只存在本浏览器：科目顺序 + 隐藏哪些科目） ---------- */
+// NAVCUST = {order:[科目名顺序], hidden:[被隐藏的科目名]}，存在 localStorage，不影响别人
 let NAVCUST = null;
 function navCust() {
   if (!NAVCUST) { try { NAVCUST = JSON.parse(localStorage.getItem("navCustom")) || {}; } catch (e) { NAVCUST = {}; } }
@@ -232,7 +302,8 @@ function navOrder(names) {
   });
 }
 
-/* ---------- 侧栏：多级目录树（复刻本地文件夹层级） ---------- */
+/* ---------- 7) 侧栏：多级目录树（复刻本地文件夹层级） ---------- */
+// 根据 MANIFEST 里每个资料的 path，把所有目录层级拼成一棵树（root.ch 是子节点 Map）
 function buildTree() {
   const root = { ch: new Map() };
   MANIFEST.items.forEach((it) => {
@@ -250,6 +321,8 @@ function buildTree() {
   return root;
 }
 
+// 把目录树画进左侧栏。walk 递归遍历：每行是一个可展开/可点选的目录节点，
+// 前面 ▶ 三角可展开子层，点行本身则是“选中该目录去筛选资料”
 function renderSidebar() {
   if (!TREE) TREE = buildTree();
   const rows = [];
@@ -306,7 +379,7 @@ $("#sidebar").addEventListener("keydown", (e) => {
   row.click();
 });
 
-/* ---------- 导航自定义弹窗 ---------- */
+/* ---------- 8) 导航自定义弹窗（勾选显隐 + 拖拽排序） ---------- */
 function openNavModal() {
   navCust();
   $("#navCustList").innerHTML = navOrder(navFolderTops())
@@ -410,7 +483,7 @@ $("#navCustReset").onclick = () => {
   TREE = null; state.folder = ""; renderSidebar(); render(); openNavModal();
 };
 
-/* ---------- 侧栏拖拽分隔条（宽度存本浏览器） ---------- */
+/* ---------- 9) 侧栏拖拽分隔条（宽度存本浏览器，用 CSS 变量 --sbw 控制） ---------- */
 (() => {
   const saved = +localStorage.getItem("sbw");
   if (saved) document.documentElement.style.setProperty("--sbw", Math.min(480, Math.max(160, saved)) + "px");
@@ -438,7 +511,7 @@ $("#navCustReset").onclick = () => {
   sp.addEventListener("pointercancel", end);
 })();
 
-/* ---------- 列表 ---------- */
+/* ---------- 10) 列表渲染 ---------- */
 // 滚到结果区第一个内容（面包屑/分组标题）上方一点，不回到页顶、侧栏不动
 function scrollToResults() {
   const el = document.querySelector("#results .crumb, #results .group-title, #results .grid");
@@ -447,8 +520,8 @@ function scrollToResults() {
   window.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
 }
 
-/* ---------- 搜索：中文长词按 2 字拆分匹配 + 常用别名，无命中时 Fuse 兜底 ---------- */
-// 常用缩写别名，双向展开（短词↔全称互为「或」备选）；只收录仓库里真实存在的科目
+/* ---------- 11) 搜索：中文长词按 2 字拆分匹配 + 常用别名，无命中时 Fuse 模糊兜底 ---------- */
+// 常用缩写别名，双向展开（短词↔全称互为“或”备选）；只收录仓库里真实存在的科目
 const SEARCH_ALIAS_PAIRS = [["高数", "高等数学"], ["线代", "线性代数"], ["计网", "计算机网络"], ["计组", "计算机组成原理"]];
 const SEARCH_ALIAS = {};
 for (const [a, b] of SEARCH_ALIAS_PAIRS) { (SEARCH_ALIAS[a] ??= []).push(b); (SEARCH_ALIAS[b] ??= []).push(a); }
@@ -475,12 +548,15 @@ function smartSearch(q) {
   return hit.sort((a, b) => score(b) - score(a));
 }
 
-// 首屏只渲染前 RENDER_LIMIT 张卡（1 千+ 卡一次性 innerHTML 明显卡顿、拖慢 FCP），
-// 预算用完挂「加载更多」哨兵，滚动到附近自动续载；筛选条件变化时重置预算
+// 首屏只渲染前 RENDER_LIMIT 张卡（1 千+ 卡一次性 innerHTML 明显卡顿、拖慢首屏渲染），
+// 预算用完挂一个“加载更多”哨兵，滚动到附近时自动续载；筛选条件变化时重置预算
 let RENDER_LIMIT = 90, _lastFilter = "";
+// 用 IntersectionObserver 监听哨兵是否接近视口（提前 600px 就触发），实现“无限滚动”式续载
 const _moreIO = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) renderMore(); }, { rootMargin: "600px" });
 function renderMore() { RENDER_LIMIT += 150; render(); }
 
+// render 是首页的“总渲染入口”：按当前 state（搜索词/目录/类型）过滤出要显示的资料，
+// 按科目或子文件夹分组后生成卡片 HTML，写进 #results
 function render() {
   const sig = state.q + "|" + state.folder + "|" + state.type;
   if (sig !== _lastFilter) { _lastFilter = sig; RENDER_LIMIT = 90; }
@@ -550,8 +626,8 @@ $("#results").addEventListener("click", (e) => {
   closeDrawer();
 });
 
-// 下载拦截：download 属性对跨域链接无效（浏览器会直接打开预览页），
-// 改为 fetch 成 blob 再落盘，文件名取自资料本身；失败时兜底开原链接
+// 下载拦截：download 属性对跨域链接无效（浏览器会直接打开预览页而不是下载），
+// 改为先 fetch 成 blob 再落盘，文件名取自资料本身；全部线路失败时兜底打开原链接
 $("#results").addEventListener("click", async (e) => {
   const a = e.target.closest("a[data-dl]");
   if (!a) return;
@@ -638,6 +714,7 @@ $("#results").addEventListener("click", async (e) => {
   delete a.dataset.busy;
 });
 
+// 按资料类型分派到不同的卡片渲染函数
 function cardHTML(it) {
   if (it.type === "link") return videoCard(it);
   if (it.type === "book") return bookCard(it);
@@ -656,6 +733,7 @@ const canPreview = (ext) => PREVIEW_EXT.has(ext) || IMG_EXT.has(ext) || TEXT_EXT
 const MIME_BY_EXT = { pdf: "application/pdf", svg: "image/svg+xml", jpg: "image/jpeg", jpeg: "image/jpeg" };
 const previewMime = (ext) => MIME_BY_EXT[ext] || (IMG_EXT.has(ext) ? `image/${ext}` : (TEXT_EXT.has(ext) ? "text/plain" : ""));
 
+// 渲染一个“文件”类型卡片：左上角类型方块 + 标题 + 备注 + 大小/目录 + 下载/预览/备用 三个按钮
 function fileCard(it) {
   const u = it.urls || {};
   const dl = u.dl || u.jsd || u.proxy || u.raw || "#";
@@ -697,6 +775,7 @@ function fileCard(it) {
     </div></div>`;
 }
 
+// 视频课程卡片（B 站）：提取 BV 号，点卡片直接在当前页弹层播放，右下角“原站”跳 B 站
 function videoCard(it) {
   const bv = (it.url.match(/BV\w+/) || [])[0];
   return `<div class="card link-card" ${bv ? `onclick="openVideo('${bv}')" style="cursor:pointer"` : ""}>
@@ -710,6 +789,7 @@ function videoCard(it) {
     </div></div>`;
 }
 
+// 电子书卡片：只给出获取链接（跳转外部）
 function bookCard(it) {
   return `<div class="card book-card">
     <div class="card-top">
@@ -722,7 +802,8 @@ function bookCard(it) {
     </div></div>`;
 }
 
-/* ---------- 高亮 ---------- */
+/* ---------- 12) 关键词高亮 ---------- */
+// 把标题里出现的搜索词用 <mark> 包起来（高亮底色）；注意先 esc 再插标签，避免 XSS
 function hl(t) {
   t = String(t ?? "");
   if (!state.q) return esc(t);
@@ -731,7 +812,8 @@ function hl(t) {
   return esc(t.slice(0, i)) + "<mark>" + esc(t.slice(i, i + state.q.length)) + "</mark>" + esc(t.slice(i + state.q.length));
 }
 
-/* ---------- 弹层 ---------- */
+/* ---------- 13) 视频弹层（内嵌 B 站播放器） ---------- */
+// openVideo 被卡片内联 onclick 调用，所以挂在 window 上（全局可见）
 window.openVideo = (bv) => {
   $("#videoFrame").innerHTML = `<iframe src="https://player.bilibili.com/player.html?bvid=${bv}&high_quality=1" allowfullscreen scrolling="no"></iframe>`;
   $("#videoModal").hidden = false;
@@ -742,9 +824,9 @@ window.closeModal = () => {
 };
 $("#videoModal").onclick = (e) => { if (e.target.id === "videoModal") closeModal(); };
 
-/* ---------- 文档在线预览 ---------- */
-// Word/PPT 由微软 Office Web Viewer 渲染：embed 供弹层 iframe 内嵌，view 供「新窗口打开」；
-// 微软服务器端抓取文件公开 URL，访客浏览器无需直接访问仓库，所有人可用。PDF 由浏览器原生渲染。
+/* ---------- 14) 文档在线预览（PDF / Word / PPT） ---------- */
+// Word/PPT 由微软 Office Web Viewer 渲染：embed 给弹层 iframe 内嵌，view 给“新窗口打开”；
+// 微软服务器端抓取文件的公开 URL，访客浏览器无需直接访问仓库，所有人可用。PDF 由浏览器原生渲染。
 function officeUrls(ext, url) {
   if (["doc", "docx", "ppt", "pptx"].includes(ext)) {
     return {
@@ -764,7 +846,7 @@ window.openPreview = (embed, view, title) => {
   document.body.style.overflow = "hidden";
 };
 
-/* ---------- pdf.js 兜底（Safari/WebKit 与所有移动端内核无法 iframe 内嵌渲染 PDF） ---------- */
+/* ---------- 15) pdf.js 兜底（Safari/WebKit 与所有移动端内核无法 iframe 内嵌渲染 PDF） ---------- */
 // macOS Safari 与所有 iOS 浏览器（含微信 iOS 端，内核全部是 WebKit）里 <iframe> 内嵌 PDF
 // 只会白屏或触发下载；Android 的 Chrome/WebView/微信等各内核同样不能在 iframe 里渲染
 // PDF，点预览会直接变成下载。这些环境统一改用 pdf.js 把 PDF 画到 canvas；
@@ -792,7 +874,8 @@ const loadPdfJs = () => {
 };
 let _pdfDoc = null, _pdfPages = [], _pdfZoom = 1, _pdfCur = 1, _pdfIO = null;
 const _pdfBusy = new Set();
-// 先按第 1 页版式铺占位页（aspect-ratio 定高），可见页再逐页 canvas 渲染，几百页的 PDF 也不会卡死
+// 先按第 1 页版式铺占位页（用宽高比先定高），可见页再逐页画到 canvas，
+// 几百页的 PDF 也不会一次性全部渲染而卡死
 async function renderPdfJs(blob) {
   const lib = await loadPdfJs();
   // cMapUrl/standardFontDataUrl：CID 中文 PDF 必需，缺失会导致中文整片消失只剩数字下划线。
@@ -829,11 +912,13 @@ async function renderPdfJs(blob) {
   _pdfPages.forEach((d) => _pdfIO.observe(d));
   pdfjsRedrawVisible(); // IntersectionObserver 在弹层刚展开时可能延迟触发，直接重画当前可见页兜底
 }
+// 按当前缩放把每页占位框设置成对应宽度
 function layoutPdfJs() {
   const avail = $("#pdfjsScroll").clientWidth - 24;
   const w = Math.max(320, Math.round(avail * _pdfZoom)); // 宽度兜底 320px，防止异常布局下 0 宽渲染挂起
   _pdfPages.forEach((d) => { d.style.width = w + "px"; });
 }
+// 真正把某一页画到 canvas 上（只画进入视口附近的页，离开的页会被移除重建）
 async function renderPdfJsPage(d) {
   if (!_pdfDoc || _pdfBusy.has(d) || d.querySelector("canvas") || d.clientWidth < 50) return;
   _pdfBusy.add(d);
@@ -885,6 +970,7 @@ $("#pdfjsScroll").addEventListener("scroll", () => {
   for (const d of _pdfPages) if (d.getBoundingClientRect().top <= mid) _pdfCur = +d.dataset.n;
   $("#pdfjsPageInfo").textContent = `${_pdfCur} / ${_pdfPages.length}`;
 }, { passive: true });
+// 关闭 pdf.js 预览：断开观察器、销毁文档、清空画布，恢复普通 iframe 状态
 function teardownPdfJs() {
   if (_pdfIO) { _pdfIO.disconnect(); _pdfIO = null; }
   _pdfPages = []; _pdfBusy.clear(); _pdfCur = 1;
@@ -892,9 +978,9 @@ function teardownPdfJs() {
   $("#pdfjsPages").innerHTML = "";
   $("#pdfjsBox").hidden = true; $("#previewFrame").hidden = false;
 }
-// 大文件（>20MB 无 jsDelivr 线路的 PDF/图片/文本）预览：raw 直连国内常被墙导致 iframe 白屏，
+// 大文件（>20MB、没有 jsDelivr 线路的 PDF/图片/文本）预览：raw 直连国内常被墙导致 iframe 白屏，
 // 改为经级联代理线路（与下载同一套备用线路）fetch 成 blob 再交给 iframe 渲染；
-// mime 交给 Blob 以便 iframe 正确渲染，fname 用于「新窗口打开」时的落盘文件名
+// mime 交给 Blob 以便 iframe 正确渲染，fname 用于“新窗口打开”时的落盘文件名
 let _previewBlobUrl = "", _previewCtrl = null, _previewGen = 0;
 // 作废在途预览请求：新预览打开或弹层关闭时调用。否则慢的大文件请求完成后会
 // 覆盖后打开的预览（标题、blob URL、iframe 全被旧内容占掉）——同下载路径 a._dlCtrl.abort() 的范式
@@ -979,7 +1065,8 @@ document.addEventListener("click", (e) => {
   else openPreview(a.dataset.embed, a.dataset.view, a.dataset.title);
 });
 
-/* ---------- 路由：#admin 管理台；#q=..&folder=..&type=.. 深链（可分享/收藏/前进后退） ---------- */
+/* ---------- 16) 路由：#admin 进管理台；#q=..&folder=..&type=.. 是深链（可分享/收藏/前进后退） ---------- */
+// 页面靠 <a href="#...">  的 hash 变化来切换视图；route() 是 hash 变化时的总调度
 function route() {
   const admin = location.hash === "#admin";
   $("#viewHome").hidden = admin;
@@ -989,6 +1076,7 @@ function route() {
   // 回主页/前进/后退：按当前 hash 恢复视图（空 hash = 清空搜索与目录筛选）
   if (MANIFEST) applyHashState();
 }
+// 把 URL 里的 #q=...&folder=...&type=... 解析回 state（深链进入时用）
 function applyHashToState() {
   const p = new URLSearchParams(location.hash.slice(1));
   state.q = p.get("q") || "";
@@ -1002,7 +1090,8 @@ function applyHashToState() {
   }
 }
 function applyHashState() { applyHashToState(); renderChips(); renderSidebar(); render(); }
-// 把当前筛选写进 URL：离散操作（点目录/切类型）pushState 可后退，连续输入（打字）replaceState 不刷历史
+// 反过来：把当前 state 写回 URL。离散操作（点目录/切类型）用 pushState 可后退，
+// 连续输入（打字搜索）用 replaceState 不往历史里塞一堆记录
 function syncHash(push) {
   const p = new URLSearchParams();
   if (state.q) p.set("q", state.q);
@@ -1012,7 +1101,8 @@ function syncHash(push) {
   history[push ? "pushState" : "replaceState"](null, "", location.pathname + location.search + (s ? "#" + s : ""));
 }
 
-/* ---------- 移动端抽屉 / 回到顶部 / 搜索清除 ---------- */
+/* ---------- 17) 移动端抽屉 / 回到顶部 / 搜索清除 ---------- */
+// 收起左侧目录抽屉（移动端）
 function closeDrawer() {
   $("#sidebar").classList.remove("open");
   $("#drawerMask").classList.remove("show");
@@ -1060,7 +1150,8 @@ $("#searchClear").onclick = () => {
   $("#searchInput").focus();
 };
 
-/* ---------- 管理台 ---------- */
+/* ---------- 18) 管理台总入口与 GitHub API 封装 ---------- */
+// TOKEN/auth：从浏览器本地读出管理台 Token；CAN_WRITE 在登录后确定「管理员 / 投稿」两种身份
 const TOKEN = () => localStorage.getItem("admin_token");
 const auth = (t) => ({ Authorization: `Bearer ${t}` });
 let CAN_WRITE = false;
@@ -1084,6 +1175,10 @@ const fileB64 = (file) => new Promise((res, rej) => {
   fr.readAsDataURL(file);
 });
 
+/* ---------- 19) 【重要】manifest 即时补丁块（__MP_BEGIN__ ～ __MP_END__） ----------
+   下面这一整块由 Python 脚本 .scripts/build_manifest.py 同规则生成，两者必须保持一致：
+   改动其中一边（如新增科目图标、别名、jsDelivr 上限）时，另一边也要同步改，否则管理台
+   打完补丁的索引会与 CI 全量重建的索引不一致。故这里的逻辑尽量不动。 */
 /* __MP_BEGIN__
    manifest 即时补丁：管理台操作在同一个 commit 里附带打完补丁的最新索引，
    本页提交成功后 0 秒生效，其他访客经仓库直读/下次部署也能立刻拿到。
@@ -1234,6 +1329,7 @@ async function mpPatch(changes) {
 }
 /* __MP_END__ */
 
+/* ---------- 20) 提交变更：用 Git Data API 把一批改动打包成「一个 commit」 ---------- */
 // Git Data API：把一批变更（上传/替换/移动/删除）打包成单个 commit，避免逐文件提交
 // change: {op:"put", path, content(b64)} | {op:"rm", path} | {op:"mv", from, to}
 // dest: 提交目标，默认本仓库 main；投稿模式传 {repo:"用户名/study-resources", branch:"submit-xxx"}
@@ -1288,6 +1384,7 @@ async function commitChanges(changes, message, dest = { repo: REPO, branch: "mai
   }
 }
 
+/* ---------- 21) 投稿模式（无写权限时自动 Fork 仓库 + 建分支 + 提 PR） ---------- */
 /* --- 投稿模式（无写权限）：自动 Fork 本仓库到用户账号并创建投稿分支 --- */
 let MY_LOGIN = null;
 async function ensureForkAndBranch(logSel = "#upLog") {
@@ -1334,6 +1431,7 @@ const isDl = (it) => it.urls?.dl && !it.urls?.raw; // Release 通道大文件（
 
 function log(msg, sel) { const el = $(sel); el.textContent += msg + "\n"; el.scrollTop = el.scrollHeight; }
 
+/* ---------- 22) 登录 / 权限 / 标签页（用 Token 判定管理员或投稿模式） ---------- */
 /* --- 登录 / 权限 --- */
 $("#adminLogin").onclick = async () => {
   const token = $("#adminToken").value.trim();
@@ -1386,6 +1484,7 @@ document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => {
   document.querySelectorAll(".tabpane").forEach((p) => (p.hidden = p.id !== "tab-" + t.dataset.tab));
 }));
 
+/* ---------- 23) 文件管理器（Windows 式：多选 / 拖拽 / 框选 / 右键菜单） ---------- */
 /* --- 文件管理器 --- */
 let fmState = { subject: "", folder: "" };
 $("#fmSubject").onchange = (e) => { fmState = { subject: e.target.value, folder: "" }; renderFm(); };
@@ -1914,6 +2013,7 @@ async function mkdir(rel, sel = "#fmLog") {
   finally { mkdirBusy = false; }
 }
 
+/* ---------- 24) 删除 / 替换 / 移动·改名 / Release 大文件辅助 ---------- */
 /* --- 删除（支持批量：文件/文件夹混合，git 部分单 commit，Release 附件逐个删） --- */
 // 展开选区里的文件夹：manifest 文件 + git 树里的 .gitkeep（manifest 不含占位符）
 async function fmExpandDirs(items) {
@@ -2077,6 +2177,7 @@ async function releaseUpload(file, releaseId) {
   return r.json();
 }
 
+/* ---------- 25) 上传 / 投稿 / 新建文件夹 ---------- */
 /* --- 上传 --- */
 let upQueue = []; // {file, rel} rel = 相对目标科目的路径
 const drop = $("#dropZone");
@@ -2177,7 +2278,7 @@ $("#nfBtn").onclick = async () => {
 };
 
 
-/* ---------- 刷新保持界面状态（sessionStorage，本标签页内刷新不丢位置） ---------- */
+/* ---------- 26) 刷新保持界面状态（sessionStorage：本标签页刷新后不丢位置） ---------- */
 let UISAVE = {};
 try { UISAVE = JSON.parse(sessionStorage.getItem("ui_state") || "{}"); } catch (e) { UISAVE = {}; }
 function saveUI() {
@@ -2191,7 +2292,7 @@ function saveUI() {
 }
 window.addEventListener("beforeunload", saveUI);
 
-/* ---------- 启动 ---------- */
+/* ---------- 27) 启动流程：初始化路由 / 恢复界面状态 / 拉取清单 ---------- */
 // URL 深链优先（分享/收藏直达），否则恢复上次界面状态（sessionStorage，本标签页内刷新不丢位置）
 const _hasDeep = location.hash.length > 1 && location.hash !== "#admin";
 if (_hasDeep) {
@@ -2224,7 +2325,7 @@ $("#searchInput").addEventListener("input", (e) => {
 initTheme();
 loadCustomWp().then(applyWallpaper); // 先取本地自定义壁纸再应用，避免闪烁到空背景
 
-/* ---------- 触摸诊断模式（?debug=touch）：排查真机触摸滚动被哪一层拦截 ---------- */
+/* ---------- 附) 触摸诊断模式（?debug=touch）：排查真机触摸滚动被哪一层拦截 ---------- */
 if (location.search.includes("debug=touch")) {
   const dbg = document.createElement("div");
   dbg.style.cssText = "position:fixed;top:60px;left:8px;right:8px;z-index:9999;background:rgba(0,0,0,.8);color:#0f0;font:11px/1.5 monospace;padding:6px 10px;border-radius:8px;pointer-events:none;white-space:pre-wrap;";

@@ -1,17 +1,40 @@
 <!DOCTYPE html>
+<!-- ============================================================================
+     中南大学资源共享库 · 首页（index.html）
+     ------------------------------------------------------------------------
+     这是网站的“骨架”：只定义页面有哪些区块（顶栏、搜索、目录、卡片容器、
+     各种弹层…），具体“长什么样”由 assets/style.css 决定，“点一下会怎样”
+     由 assets/app.js 决定。三者分工：HTML=结构、CSS=外观、JS=行为。
+
+     页面结构自上而下：
+       1) <head>            标题、图标、样式表（注意 ?v=... 是缓存版本号，构建时会自动换新）
+       2) <body> 顶部       跳到主内容链接 + 无 JS 提示 + 壁纸层 + 顶栏
+       3) #viewHome         首页：大标题、搜索框、类型筛选、左侧目录、卡片结果区
+       4) #viewAdmin        管理台（默认隐藏，URL 带 #admin 才显示）
+       5) 若干 .modal 弹层   移动/改名、新建文件夹、导航自定义、视频、文档预览、使用说明
+       6) 页脚 + 脚本
+
+     小提示：带 id="..." 的元素是给 app.js 用 JS 精准定位/操作的目标，先不用逐个记住。
+     ============================================================================ -->
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>中南大学资源共享库</title>
 <meta name="description" content="中南大学资源共享库：真题、笔记、PPT、电子书与视频课程一站式检索下载">
+<!-- 样式表：?v=20261118-2329 是版本号（每次构建自动更新，用来让浏览器拿到最新样式而非旧缓存） -->
 <link rel="stylesheet" href="assets/style.css?v=20261118-2329">
+<!-- 网站图标：用一段内联 SVG（📚 表情）当 favicon，无需额外图片文件 -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
 </head>
 <body>
+<!-- 无障碍：键盘用户按 Tab 最先看到“跳到主要内容”，回车直接跳过顶栏 -->
 <a class="skip-link" href="#app">跳到主要内容</a>
+<!-- 禁用 JS 时的友好提示：资料仍可去 GitHub 仓库直接下载 -->
 <noscript><div class="noscript-tip">⚠️ 本站的搜索、预览需要启用 JavaScript。所有资料也可以直接到 <a href="https://github.com/xyqmbyl/study-resources" target="_blank" rel="noopener">GitHub 仓库</a> 浏览下载。</div></noscript>
+<!-- 壁纸背景层：一块空 div，背景图由 app.js 设置 -->
 <div id="wallpaper" aria-hidden="true"></div>
+<!-- 顶栏：左侧 ☰（手机端开目录）、站名（回首页）、右侧主题/壁纸/导航/管理台/GitHub -->
 <header class="topbar">
   <button id="menuBtn" class="menu-btn" aria-label="打开目录菜单" aria-expanded="false" aria-controls="sidebar">☰</button>
   <a class="brand" href="#">📚 中南大学资源共享库</a>
@@ -26,8 +49,9 @@
 </header>
 
 <main id="app" tabindex="-1">
-  <!-- 首页 -->
+  <!-- ===== 首页（默认显示）===== -->
   <section id="viewHome">
+    <!-- Hero：大标题 + 搜索框（含快捷键提示与清空按钮）+ 统计 + 使用说明入口 -->
     <div class="hero">
       <h1 id="heroTitle" class="hero-title">📚 中南大学资源共享库</h1>
       <div class="search-wrap">
@@ -40,12 +64,15 @@
       <button id="helpBtn" class="help-btn" type="button" onclick="document.getElementById('helpModal').hidden=false">📖 使用说明：怎么搜 / 预览 / 下载 / 投稿</button>
     </div>
 
+    <!-- 类型筛选：全部 / 文件 / 视频课程 / 电子书 的胶囊按钮，由 app.js 填充 -->
     <div class="chips" id="typeChips" role="group" aria-label="按类型筛选"></div>
+    <!-- 主体两栏：左=目录侧栏（手机端变抽屉），中=可拖拽分隔条，右=结果内容 -->
     <div class="layout">
       <div class="drawer-mask" id="drawerMask" aria-hidden="true"></div>
       <aside class="sidebar" id="sidebar" aria-label="资料目录"></aside>
       <div class="splitter" title="拖动调整目录与内容宽度"></div>
       <section class="content">
+        <!-- 结果区：先放一排骨架屏占位，数据到了由 app.js 替换成资料卡片 -->
         <div id="results" aria-live="polite">
           <div class="skeleton" aria-hidden="true">
             <div class="sk-card"><div class="sk-line"></div><div class="sk-line"></div><div class="sk-line"></div></div>
@@ -60,7 +87,7 @@
     </div>
   </section>
 
-  <!-- 管理页 -->
+  <!-- ===== 管理台（默认 hidden，URL hash 为 #admin 时由 app.js 显示）===== -->
   <section id="viewAdmin" hidden>
     <div class="admin-box">
       <div class="admin-head">
@@ -69,6 +96,7 @@
       </div>
       <p class="admin-hint">用 GitHub Token 登录：<b>有仓库写权限</b>（协作者）→ 管理员模式，可直接上传、替换、移动、删除资料；<b>无写权限</b>（普通同学）→ 投稿模式，同样能上传资料，系统自动 Fork + 提 PR，管理员合并后上线。Token 只保存在你自己的浏览器里。</p>
       <div id="adminLoginBox">
+        <!-- 登录框：粘贴 GitHub Token 后由 app.js 校验并判定 管理员 / 投稿 身份 -->
         <input id="adminToken" type="password" placeholder="github_pat_ / ghp_ 开头的 Fine-grained Token">
         <button id="adminLogin" class="btn primary">进入管理台</button>
         <details class="token-help">
@@ -84,6 +112,7 @@
       </div>
       <div id="adminPanel" hidden>
         <p id="adminMsg"></p>
+        <!-- 三个功能标签页：文件管理 / 上传投稿 / 新建文件夹（由 app.js 切换显示） -->
         <div class="tabs" id="adminTabs">
           <button class="tab active" data-tab="fm">📁 文件管理</button>
           <button class="tab" data-tab="up">⬆ 上传 / 投稿</button>
@@ -142,6 +171,7 @@
   </section>
 </main>
 
+<!-- ========== 以下是各种弹层（.modal）：默认 hidden，需要时才显示 ========== -->
 <!-- 移动/改名弹层 -->
 <div id="moveModal" class="modal" hidden>
   <div class="modal-box form-box">
@@ -258,14 +288,17 @@
   </div>
 </div>
 
+<!-- 回到顶部按钮：默认隐藏，页面下滑超过一定距离后由 app.js 显示 -->
 <button id="backTop" class="back-top" aria-label="回到顶部" title="回到顶部">↑</button>
 
+<!-- 页脚：共建说明、同步提示、构建号（构建号由构建脚本自动写入，便于排查缓存） -->
 <footer class="footer">
   <p>同学共建 · 自取自用 · 欢迎补充 <a href="https://github.com/xyqmbyl/study-resources" target="_blank" rel="noopener">GitHub</a> · <a href="https://github.com/xyqmbyl/study-resources/issues/new/choose" target="_blank" rel="noopener">反馈 / 求资源</a></p>
   <p class="footer-sub" id="ftGen">数据与 GitHub 仓库实时同步</p>
   <p class="footer-sub">构建 <span id="buildTag">20261118-2329</span></p>
 </footer>
 
+<!-- 脚本：先加载 Fuse.js（模糊搜索库，本地自带），再加载 app.js（本站全部逻辑） -->
 <script src="assets/fuse.min.js?v=20261118-2329"></script>
 <script src="assets/app.js?v=20261118-2329"></script>
 </body>
